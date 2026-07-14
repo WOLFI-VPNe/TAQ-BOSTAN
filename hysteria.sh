@@ -76,7 +76,7 @@ esac
 
 if [ -f "/usr/local/bin/hysteria" ]; then
  colorEcho "Hysteria binary already exists at /usr/local/bin/hysteria. Skipping download." yellow
- else
+else
  colorEcho "Downloading Hysteria binary for: $ARCH" cyan
  if ! curl -fsSL "$DOWNLOAD_URL" -o hysteria; then
    colorEcho "Failed to download hysteria binary." red
@@ -84,7 +84,7 @@ if [ -f "/usr/local/bin/hysteria" ]; then
  fi
  chmod +x hysteria
  sudo mv hysteria /usr/local/bin/
- fi
+fi
 sudo mkdir -p /etc/hysteria/
 MAPPING_FILE="/etc/hysteria/port_mapping.txt"
 if [ ! -f "$MAPPING_FILE" ]; then
@@ -348,11 +348,21 @@ if [ "$SERVER_TYPE" == "iran" ]; then
   done
 fi
 
+# ------------------ Client Mode Menu ------------------
+if [ "$SERVER_TYPE" == "iran" ]; then
+  draw_menu "Client Mode Selection" \
+    "1 | Port Forwarding (TCP/UDP)" \
+    "2 | SOCKS5 Proxy" \
+    "3 | HTTP Proxy" \
+    "4 | All of the above (Port Forwarding + SOCKS5 + HTTP)"
+  read -r CLIENT_MODE_CHOICE
+fi
+
 # ------------------ Obfuscation Option ------------------
-read -p "Do you want to enable Obfuscation (obfs)? [y/N]: " ENABLE_OBFS
+read -p "Do you want to enable Obfuscation (obfs) Salamander? [Y/n]: " ENABLE_OBFS
 ENABLE_OBFS=$(echo "$ENABLE_OBFS" | tr '[:upper:]' '[:lower:]')
 
-if [[ "$ENABLE_OBFS" == "y" || "$ENABLE_OBFS" == "yes" ]]; then
+if [[ "$ENABLE_OBFS" != "n" && "$ENABLE_OBFS" != "no" ]]; then
   OBFS_CONFIG=$(cat <<EOF
 obfs:
   type: salamander
@@ -364,33 +374,34 @@ else
   OBFS_CONFIG=""
 fi
 
-# ------------------ QUIC Settings (OPTIMIZED FOR MAX SPEED) ------------------
+# ------------------ QUIC Settings (MAX PERFORMANCE) ------------------
 QUIC_SETTINGS=$(cat <<EOF
 quic:
-  initStreamReceiveWindow: 67108864
-  maxStreamReceiveWindow: 134217728
-  initConnReceiveWindow: 201326592
-  maxConnReceiveWindow: 402653184
-  maxIdleTimeout: 30s
+  initStreamReceiveWindow: 134217728
+  maxStreamReceiveWindow: 268435456
+  initConnReceiveWindow: 402653184
+  maxConnReceiveWindow: 805306368
+  maxIdleTimeout: 60s
   keepAliveInterval: 10s
   maxIncomingStreams: 65535
   disablePathMTUDiscovery: true
 fastOpen: true
 lazy: true
-hopInterval: 30s
+hopInterval: 15s
+ignoreClientBandwidth: true
 EOF
 )
 
 # ------------------ Fragmentation Option ------------------
-read -p "Do you want to enable TLS Fragmentation (anti-censorship)? [Y/n]: " ENABLE_FRAGMENT
+read -p "Do you want to enable TLS Fragmentation (anti-censorship, recommended)? [Y/n]: " ENABLE_FRAGMENT
 ENABLE_FRAGMENT=$(echo "$ENABLE_FRAGMENT" | tr '[:upper:]' '[:lower:]')
 
 if [[ "$ENABLE_FRAGMENT" != "n" && "$ENABLE_FRAGMENT" != "no" ]]; then
   FRAGMENT_CONFIG=$(cat <<EOF
 tlsFragment:
   enable: true
-  size: 100-300
-  sleep: 5-15
+  size: 50-350
+  sleep: 3-20
 EOF
 )
 else
@@ -399,7 +410,7 @@ fi
 
 # ------------------ Foreign Server Setup ------------------
 if [ "$SERVER_TYPE" == "foreign" ]; then
-  colorEcho "Setting up foreign server..." green
+  colorEcho "Setting up FOREIGN server (MAX PERFORMANCE)..." green
 
   if ! command -v openssl &> /dev/null; then
     sudo apt update -y && sudo apt install -y openssl
@@ -413,7 +424,7 @@ if [ "$SERVER_TYPE" == "foreign" ]; then
   sudo chmod 600 /etc/hysteria/self.*
 
   while true; do
-    read -p "Enter Hysteria port ex.(443) or (1-65535): " H_PORT
+    read -p "Enter Hysteria port ex.(443, 8443, 2096, 2053, 53): " H_PORT
     if [[ "$H_PORT" =~ ^[0-9]+$ ]] && (( H_PORT > 0 && H_PORT < 65536 )); then
       break
     else
@@ -422,13 +433,44 @@ if [ "$SERVER_TYPE" == "foreign" ]; then
   done
 
   while true; do
-    read -p "Enter password: " H_PASSWORD
+    read -p "Enter password (strong): " H_PASSWORD
     if [[ -z "$H_PASSWORD" ]]; then
       colorEcho "Password cannot be empty. Please enter a valid password." red
     else
       break
     fi
   done
+
+  draw_menu "Foreign Server Extras" \
+    "1 | Standard (Port Forwarding Only)" \
+    "2 | + SOCKS5 Proxy (for direct use)" \
+    "3 | + HTTP Proxy (for direct use)" \
+    "4 | + SOCKS5 + HTTP (All Inbound Types)"
+  read -r FOREIGN_EXTRA_CHOICE
+
+  # Build Foreign Inbounds
+  FOREIGN_INBOUNDS=""
+  if [[ "$FOREIGN_EXTRA_CHOICE" == "2" || "$FOREIGN_EXTRA_CHOICE" == "4" ]]; then
+    FOREIGN_INBOUNDS=$(cat <<EOF2
+
+socks5:
+  listen: 0.0.0.0:1080
+  username: ""
+  password: ""
+  disableUDP: false
+EOF2
+)
+  fi
+  if [[ "$FOREIGN_EXTRA_CHOICE" == "3" || "$FOREIGN_EXTRA_CHOICE" == "4" ]]; then
+    FOREIGN_INBOUNDS+=$(cat <<EOF2
+
+http:
+  listen: 0.0.0.0:8080
+  username: ""
+  password: ""
+EOF2
+)
+  fi
 
   cat << EOF | sudo tee /etc/hysteria/server-config.yaml > /dev/null
 listen: ":$H_PORT"
@@ -443,23 +485,33 @@ $(echo "$QUIC_SETTINGS")
 $(echo "$FRAGMENT_CONFIG")
 speedTest: true
 bandwidth:
-  up: 1 gbps
-  down: 1 gbps
+  up: 10 gbps
+  down: 10 gbps
+ignoreClientBandwidth: true
+disableUDP: false
+udpIdleTimeout: 60s
+$FOREIGN_INBOUNDS
 EOF
 
   cat << EOF | sudo tee /etc/systemd/system/hysteria.service > /dev/null
 [Unit]
-Description=Hysteria2 Tunnel Service (Optimized)
+Description=Hysteria2 Tunnel Service (MAX PERFORMANCE)
 After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/hysteria server -c /etc/hysteria/server-config.yaml
 Restart=always
-RestartSec=5
-LimitNOFILE=1048576
+RestartSec=3
+LimitNOFILE=infinity
+LimitNPROC=infinity
 StandardOutput=file:/var/log/hysteria.log
 StandardError=file:/var/log/hysteria.err
+Nice=-10
+IOSchedulingClass=realtime
+IOSchedulingPriority=0
 
 [Install]
 WantedBy=multi-user.target
@@ -476,16 +528,16 @@ EOF
   crontab "$TMP_FILE"
   rm -f "$TMP_FILE"
 
-  colorEcho "Foreign server setup completed." green
+  colorEcho "Foreign server setup completed! Enjoy maximum speed!" green
 
 # ------------------ Iranian Client Setup ------------------
 elif [ "$SERVER_TYPE" == "iran" ]; then
-  colorEcho "Setting up Iranian server..." green
+  colorEcho "Setting up IRANIAN server (MAX PERFORMANCE)..." green
 
   read -p "How many foreign servers do you have? " SERVER_COUNT
 
   for (( i=1; i<=SERVER_COUNT; i++ )); do
-    colorEcho "Foreign server #$i:" cyan
+    colorEcho "Foreign server #${i}:" cyan
     while true; do
       read -p "Enter IP Address or Domain for Foreign server: " SERVER_ADDRESS
       if [[ "$SERVER_ADDRESS" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
@@ -511,30 +563,84 @@ elif [ "$SERVER_TYPE" == "iran" ]; then
       fi
     done
 
-    echo "Popular SNI options: cdn.discordapp.com, images.unsplash.com, fonts.googleapis.com, www.cloudflare.com"
-    read -p "SNI ex.(cdn.discordapp.com): " SNI
-    read -p "How many ports do you have for forwarding? ex.(1) " PORT_FORWARD_COUNT
+    echo " "
+    echo "Popular SNI options:"
+    echo "  1. cdn.discordapp.com"
+    echo "  2. images.unsplash.com"
+    echo "  3. fonts.googleapis.com"
+    echo "  4. www.cloudflare.com"
+    echo "  5. cdn.jsdelivr.net"
+    echo "  6. github.githubassets.com"
+    echo "  7. raw.githubusercontent.com"
+    echo "  8. www.google.com"
+    echo "  9. www.youtube.com"
+    echo " 10. android.googleapis.com"
+    echo " "
+    read -p "Enter SNI (or choose number 1-10): " SNI_INPUT
 
+    case "$SNI_INPUT" in
+      1) SNI="cdn.discordapp.com" ;;
+      2) SNI="images.unsplash.com" ;;
+      3) SNI="fonts.googleapis.com" ;;
+      4) SNI="www.cloudflare.com" ;;
+      5) SNI="cdn.jsdelivr.net" ;;
+      6) SNI="github.githubassets.com" ;;
+      7) SNI="raw.githubusercontent.com" ;;
+      8) SNI="www.google.com" ;;
+      9) SNI="www.youtube.com" ;;
+      10) SNI="android.googleapis.com" ;;
+      *) SNI="$SNI_INPUT" ;;
+    esac
+
+    # Build Client Inbounds based on Mode
+    CLIENT_INBOUNDS=""
     TCP_FORWARD=""
     UDP_FORWARD=""
     FORWARDED_PORTS=""
 
-    for (( p=1; p<=$PORT_FORWARD_COUNT; p++ ))
-    do
-      read -p "Enter port number #$p you want to tunnel: " TUNNEL_PORT
+    if [[ "$CLIENT_MODE_CHOICE" == "1" || "$CLIENT_MODE_CHOICE" == "4" ]]; then
+      read -p "How many ports do you have for forwarding? ex.(1): " PORT_FORWARD_COUNT
+      for (( p=1; p<=$PORT_FORWARD_COUNT; p++ )); do
+        read -p "Enter port number #${p} you want to tunnel: " TUNNEL_PORT
 
-      TCP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
+        TCP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
     remote: '$REMOTE_IP:$TUNNEL_PORT'
 "
-      UDP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
+        UDP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
     remote: '$REMOTE_IP:$TUNNEL_PORT'
 "
-      if [ -z "$FORWARDED_PORTS" ]; then
-        FORWARDED_PORTS="$TUNNEL_PORT"
-      else
-        FORWARDED_PORTS="$FORWARDED_PORTS,$TUNNEL_PORT"
-      fi
-    done
+        if [ -z "$FORWARDED_PORTS" ]; then
+          FORWARDED_PORTS="$TUNNEL_PORT"
+        else
+          FORWARDED_PORTS="$FORWARDED_PORTS,$TUNNEL_PORT"
+        fi
+      done
+    fi
+
+    if [[ "$CLIENT_MODE_CHOICE" == "2" || "$CLIENT_MODE_CHOICE" == "4" ]]; then
+      SOCKS_PORT=$((1080 + i - 1))
+      CLIENT_INBOUNDS+=$(cat <<EOF2
+
+socks5:
+  listen: 0.0.0.0:$SOCKS_PORT
+  username: ""
+  password: ""
+  disableUDP: false
+EOF2
+)
+    fi
+
+    if [[ "$CLIENT_MODE_CHOICE" == "3" || "$CLIENT_MODE_CHOICE" == "4" ]]; then
+      HTTP_PORT=$((8080 + i - 1))
+      CLIENT_INBOUNDS+=$(cat <<EOF2
+
+http:
+  listen: 0.0.0.0:$HTTP_PORT
+  username: ""
+  password: ""
+EOF2
+)
+    fi
 
     # Create configuration and service files for each tunnel
     CONFIG_FILE="/etc/hysteria/iran-config${i}.yaml"
@@ -546,6 +652,10 @@ auth: "$PASSWORD"
 tls:
   sni: "$SNI"
   insecure: true
+  alpn:
+    - h3
+    - h2
+    - http/1.1
 $(echo "$OBFS_CONFIG" | sed "s/__REPLACE_PASSWORD__/$PASSWORD/")
 $(echo "$QUIC_SETTINGS")
 $(echo "$FRAGMENT_CONFIG")
@@ -554,23 +664,34 @@ $TCP_FORWARD
 udpForwarding:
 $UDP_FORWARD
 bandwidth:
-  up: 1 gbps
-  down: 1 gbps
+  up: 10 gbps
+  down: 10 gbps
+retry: 3
+retryInterval: 3s
+handshakeTimeout: 15s
+idleTimeout: 60s
+$CLIENT_INBOUNDS
 EOF
 
     cat << EOF | sudo tee "$SERVICE_FILE" > /dev/null
 [Unit]
-Description=Hysteria2 Client $i (Optimized)
+Description=Hysteria2 Client ${i} (MAX PERFORMANCE)
 After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/hysteria client -c $CONFIG_FILE
 Restart=always
-RestartSec=5
-LimitNOFILE=1048576
+RestartSec=3
+LimitNOFILE=infinity
+LimitNPROC=infinity
 StandardOutput=file:/var/log/hysteria${i}.log
 StandardError=file:/var/log/hysteria${i}.err
+Nice=-10
+IOSchedulingClass=realtime
+IOSchedulingPriority=0
 
 [Install]
 WantedBy=multi-user.target
@@ -579,14 +700,12 @@ EOF
     sudo systemctl daemon-reload
     sudo systemctl enable --now hysteria${i}
     sudo systemctl reload-or-restart hysteria${i}
-
     
     # Add cron job for each tunnel
-
-    echo "iran-config${i}.yaml|hysteria${i}|${FORWARDED_PORTS}" \
-    | sudo tee -a "$MAPPING_FILE" > /dev/null
-    colorEcho "Tunnel $i setup completed." green
+    echo "iran-config${i}.yaml|hysteria${i}|${FORWARDED_PORTS}" | sudo tee -a "$MAPPING_FILE" > /dev/null
+    colorEcho "Tunnel ${i} setup completed!" green
   done
+
 # ====== Set up per-config iptables counters ======
 while IFS='|' read -r cfg service ports; do
   idx="${cfg##*config}"      # => "1.yaml"
@@ -596,8 +715,10 @@ while IFS='|' read -r cfg service ports; do
   sudo iptables -t mangle -A "$chain" -j RETURN
   IFS=',' read -ra PARR <<< "$ports"
   for p in "${PARR[@]}"; do
-    sudo iptables -t mangle -A OUTPUT -p tcp --dport "$p" -j "$chain"
-    sudo iptables -t mangle -A OUTPUT -p udp --dport "$p" -j "$chain"
+    if [ -n "$p" ]; then
+      sudo iptables -t mangle -A OUTPUT -p tcp --dport "$p" -j "$chain"
+      sudo iptables -t mangle -A OUTPUT -p udp --dport "$p" -j "$chain"
+    fi
   done
 done < "$MAPPING_FILE"
 
@@ -621,8 +742,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable hysteria-monitor
 sudo systemctl start hysteria-monitor
 
-
-  colorEcho "All tunnels set up successfully." green
+  colorEcho "All tunnels set up successfully! MAX PERFORMANCE ACTIVE!" green
 else
   colorEcho "Invalid server type. Please enter 'Iran' or 'Foreign'." red
   exit 1
