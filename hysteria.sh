@@ -86,7 +86,7 @@ else
  sudo mv hysteria /usr/local/bin/
 fi
 sudo mkdir -p /etc/hysteria/
-MAPPING_FILE="/etc/hysteria/port_mapping.txt"
+MAPPING_FILE="/etc/hysteria/hysteria-mapping.txt"
 if [ ! -f "$MAPPING_FILE" ]; then
   sudo touch "$MAPPING_FILE"
 fi
@@ -268,7 +268,8 @@ draw_menu "Server Type Selection" \
           "1 | Create New Tunnel" \
           "2 | Edit tunnel list" \
           "3 | Monitor Traffic Ports" \
-          "4 | Exit"
+          "4 | Hysteria Tunnel Speedtest" \
+          "5 | Exit"
         read -rp "> " IRAN_CHOICE
         case "$IRAN_CHOICE" in
           1) 
@@ -280,11 +281,15 @@ draw_menu "Server Type Selection" \
           3) 
             monitor_ports     
             ;;
-          4) 
+          4)
+            read -p "For which foreign server number do you want to run the speedtest? " server_number
+            /usr/local/bin/hysteria client -c /etc/hysteria/iran-config${server_number}.yaml speedtest
+            ;;
+          5) 
             colorEcho "Exiting..." yellow; exit 0 
             ;;
           *) 
-            colorEcho "Invalid selection. Please enter 1, 2, 3, or 4." red 
+            colorEcho "Invalid selection. Please enter 1, 2, 3, 4, or 5." red 
             ;;
         esac
       done
@@ -381,8 +386,8 @@ quic:
   maxStreamReceiveWindow: 268435456
   initConnReceiveWindow: 402653184
   maxConnReceiveWindow: 805306368
-  maxIdleTimeout: 60s
-  keepAliveInterval: 10s
+  maxIdleTimeout: 300s
+  keepAliveInterval: 30s
   maxIncomingStreams: 65535
   disablePathMTUDiscovery: true
 fastOpen: true
@@ -666,10 +671,10 @@ $UDP_FORWARD
 bandwidth:
   up: 10 gbps
   down: 10 gbps
-retry: 3
-retryInterval: 3s
-handshakeTimeout: 15s
-idleTimeout: 60s
+retry: 5
+retryInterval: 5s
+handshakeTimeout: 60s
+idleTimeout: 300s
 $CLIENT_INBOUNDS
 EOF
 
