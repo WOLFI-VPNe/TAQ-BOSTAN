@@ -352,17 +352,6 @@ if [ "$SERVER_TYPE" == "iran" ]; then
     esac
   done
 fi
-
-# ------------------ Client Mode Menu ------------------
-if [ "$SERVER_TYPE" == "iran" ]; then
-  draw_menu "Client Mode Selection" \
-    "1 | Port Forwarding (TCP/UDP)" \
-    "2 | SOCKS5 Proxy" \
-    "3 | HTTP Proxy" \
-    "4 | All of the above (Port Forwarding + SOCKS5 + HTTP)"
-  read -r CLIENT_MODE_CHOICE
-fi
-
 # ------------------ Obfuscation Option ------------------
 read -p "Do you want to enable Obfuscation (obfs) Salamander? [Y/n]: " ENABLE_OBFS
 ENABLE_OBFS=$(echo "$ENABLE_OBFS" | tr '[:upper:]' '[:lower:]')
@@ -386,8 +375,8 @@ quic:
   maxStreamReceiveWindow: 268435456
   initConnReceiveWindow: 402653184
   maxConnReceiveWindow: 805306368
-  maxIdleTimeout: 300s
-  keepAliveInterval: 30s
+  maxIdleTimeout: 120s
+  keepAliveInterval: 20s
   maxIncomingStreams: 65535
   disablePathMTUDiscovery: true
 fastOpen: true
@@ -432,36 +421,8 @@ if [ "$SERVER_TYPE" == "foreign" ]; then
     fi
   done
 
-  draw_menu "Foreign Server Extras" \
-    "1 | Standard (Port Forwarding Only)" \
-    "2 | + SOCKS5 Proxy (for direct use)" \
-    "3 | + HTTP Proxy (for direct use)" \
-    "4 | + SOCKS5 + HTTP (All Inbound Types)"
-  read -r FOREIGN_EXTRA_CHOICE
-
-  # Build Foreign Inbounds
+  # Build Foreign Inbounds - ONLY Port Forwarding
   FOREIGN_INBOUNDS=""
-  if [[ "$FOREIGN_EXTRA_CHOICE" == "2" || "$FOREIGN_EXTRA_CHOICE" == "4" ]]; then
-    FOREIGN_INBOUNDS=$(cat <<EOF2
-
-socks5:
-  listen: 0.0.0.0:1080
-  username: ""
-  password: ""
-  disableUDP: false
-EOF2
-)
-  fi
-  if [[ "$FOREIGN_EXTRA_CHOICE" == "3" || "$FOREIGN_EXTRA_CHOICE" == "4" ]]; then
-    FOREIGN_INBOUNDS+=$(cat <<EOF2
-
-http:
-  listen: 0.0.0.0:8080
-  username: ""
-  password: ""
-EOF2
-)
-  fi
 
   cat << EOF | sudo tee /etc/hysteria/server-config.yaml > /dev/null
 listen: ":$H_PORT"
@@ -582,55 +543,27 @@ elif [ "$SERVER_TYPE" == "iran" ]; then
       *) SNI="$SNI_INPUT" ;;
     esac
 
-    # Build Client Inbounds based on Mode
-    CLIENT_INBOUNDS=""
+    # Build Client Inbounds - ONLY Port Forwarding
     TCP_FORWARD=""
     UDP_FORWARD=""
     FORWARDED_PORTS=""
 
-    if [[ "$CLIENT_MODE_CHOICE" == "1" || "$CLIENT_MODE_CHOICE" == "4" ]]; then
-      read -p "How many ports do you have for forwarding? ex.(1): " PORT_FORWARD_COUNT
-      for (( p=1; p<=$PORT_FORWARD_COUNT; p++ )); do
-        read -p "Enter port number #${p} you want to tunnel: " TUNNEL_PORT
+    read -p "How many ports do you have for forwarding? ex.(1): " PORT_FORWARD_COUNT
+    for (( p=1; p<=$PORT_FORWARD_COUNT; p++ )); do
+      read -p "Enter port number #${p} you want to tunnel: " TUNNEL_PORT
 
-        TCP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
+      TCP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
     remote: '$REMOTE_IP:$TUNNEL_PORT'
 "
-        UDP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
+      UDP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
     remote: '$REMOTE_IP:$TUNNEL_PORT'
 "
-        if [ -z "$FORWARDED_PORTS" ]; then
-          FORWARDED_PORTS="$TUNNEL_PORT"
-        else
-          FORWARDED_PORTS="$FORWARDED_PORTS,$TUNNEL_PORT"
-        fi
-      done
-    fi
-
-    if [[ "$CLIENT_MODE_CHOICE" == "2" || "$CLIENT_MODE_CHOICE" == "4" ]]; then
-      SOCKS_PORT=$((1080 + i - 1))
-      CLIENT_INBOUNDS+=$(cat <<EOF2
-
-socks5:
-  listen: 0.0.0.0:$SOCKS_PORT
-  username: ""
-  password: ""
-  disableUDP: false
-EOF2
-)
-    fi
-
-    if [[ "$CLIENT_MODE_CHOICE" == "3" || "$CLIENT_MODE_CHOICE" == "4" ]]; then
-      HTTP_PORT=$((8080 + i - 1))
-      CLIENT_INBOUNDS+=$(cat <<EOF2
-
-http:
-  listen: 0.0.0.0:$HTTP_PORT
-  username: ""
-  password: ""
-EOF2
-)
-    fi
+      if [ -z "$FORWARDED_PORTS" ]; then
+        FORWARDED_PORTS="$TUNNEL_PORT"
+      else
+        FORWARDED_PORTS="$FORWARDED_PORTS,$TUNNEL_PORT"
+      fi
+    done
 
     # Create configuration and service files for each tunnel
     CONFIG_FILE="/etc/hysteria/iran-config${i}.yaml"
@@ -654,8 +587,7 @@ bandwidth:
 retry: 5
 retryInterval: 5s
 handshakeTimeout: 60s
-idleTimeout: 300s
-$CLIENT_INBOUNDS
+idleTimeout: 120s
 EOF
 
     cat << EOF | sudo tee "$SERVICE_FILE" > /dev/null
