@@ -397,22 +397,8 @@ ignoreClientBandwidth: true
 EOF
 )
 
-# ------------------ Fragmentation Option ------------------
-read -p "Do you want to enable TLS Fragmentation (anti-censorship, recommended)? [Y/n]: " ENABLE_FRAGMENT
-ENABLE_FRAGMENT=$(echo "$ENABLE_FRAGMENT" | tr '[:upper:]' '[:lower:]')
-
-if [[ "$ENABLE_FRAGMENT" != "n" && "$ENABLE_FRAGMENT" != "no" ]]; then
-  FRAGMENT_CONFIG=$(cat <<EOF
-tlsFragment:
-  enable: true
-  size: 50-350
-  sleep: 3-20
-EOF
-)
-else
-  FRAGMENT_CONFIG=""
-fi
-
+# ------------------ Fragmentation REMOVED for MAX SPEED
+FRAGMENT_CONFIG=""
 # ------------------ Foreign Server Setup ------------------
 if [ "$SERVER_TYPE" == "foreign" ]; then
   colorEcho "Setting up FOREIGN server (MAX PERFORMANCE)..." green
@@ -487,7 +473,6 @@ auth:
   password: "$H_PASSWORD"
 $(echo "$OBFS_CONFIG" | sed "s/__REPLACE_PASSWORD__/$H_PASSWORD/")
 $(echo "$QUIC_SETTINGS")
-$(echo "$FRAGMENT_CONFIG")
 speedTest: true
 bandwidth:
   up: 10 gbps
@@ -657,13 +642,8 @@ auth: "$PASSWORD"
 tls:
   sni: "$SNI"
   insecure: true
-  alpn:
-    - h3
-    - h2
-    - http/1.1
 $(echo "$OBFS_CONFIG" | sed "s/__REPLACE_PASSWORD__/$PASSWORD/")
 $(echo "$QUIC_SETTINGS")
-$(echo "$FRAGMENT_CONFIG")
 tcpForwarding:
 $TCP_FORWARD
 udpForwarding:
