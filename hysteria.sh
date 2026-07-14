@@ -283,7 +283,7 @@ draw_menu "Server Type Selection" \
             ;;
           4)
             read -p "For which foreign server number do you want to run the speedtest? " server_number
-            /usr/local/bin/hysteria client -c /etc/hysteria/iran-config${server_number}.yaml speedtest
+            /usr/local/bin/hysteria -c /etc/hysteria/iran-config${server_number}.yaml speedtest
             ;;
           5) 
             colorEcho "Exiting..." yellow; exit 0 
