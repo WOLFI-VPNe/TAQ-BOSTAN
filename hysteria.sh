@@ -59,6 +59,7 @@ draw_menu() {
 
 # ------------------ Initialization ------------------
 ARCH=$(uname -m)
+# Latest Hysteria version (as of 2025)
 HYSTERIA_VERSION_AMD64="https://github.com/apernet/hysteria/releases/download/app%2Fv2.6.1/hysteria-linux-amd64"
 HYSTERIA_VERSION_ARM="https://github.com/apernet/hysteria/releases/download/app%2Fv2.6.1/hysteria-linux-arm"
 HYSTERIA_VERSION_ARM64="https://github.com/apernet/hysteria/releases/download/app%2Fv2.6.1/hysteria-linux-arm64"
@@ -311,7 +312,7 @@ if [ "$SERVER_TYPE" == "iran" ]; then
     for cfg in /etc/hysteria/iran-config*.yaml; do
       num="${cfg##*iran-config}"
       num="${num%.yaml}"
-      if (( num >= NEXT_TUNNEL )); then
+      if (( num >= NEXT_TUNNEL)); then
         NEXT_TUNNEL=$((num + 1))
       fi
     done
@@ -363,72 +364,38 @@ else
   OBFS_CONFIG=""
 fi
 
-# ------------------ QUIC Settings Based on Usage ------------------
-draw_menu "Expected Simultaneous Users" \
-  "1 | 1 to 50 users (Light load)" \
-  "2 | 50 to 100 users (Medium load)" \
-  "3 | 100 to 300 users (Heavy load)"
-read -r USAGE_CHOICE
-
-case "$USAGE_CHOICE" in
-  1)
-    QUIC_SETTINGS=$(cat <<EOF
+# ------------------ QUIC Settings (OPTIMIZED FOR MAX SPEED) ------------------
+QUIC_SETTINGS=$(cat <<EOF
 quic:
-  initStreamReceiveWindow: 25165824
-  maxStreamReceiveWindow: 50331648
-  initConnReceiveWindow: 50331648
-  maxConnReceiveWindow: 100663296
-  maxIdleTimeout: 15s
-  keepAliveInterval: 10s
-  maxIncomingStreams: 4096
-  disablePathMTUDiscovery: false
-EOF
-)
-    ;;
-  2)
-    QUIC_SETTINGS=$(cat <<EOF
-quic:
-  initStreamReceiveWindow: 50331648
-  maxStreamReceiveWindow: 100663296
-  initConnReceiveWindow: 100663296
-  maxConnReceiveWindow: 201326592
-  maxIdleTimeout: 15s
-  keepAliveInterval: 10s
-  maxIncomingStreams: 8192
-  disablePathMTUDiscovery: false
-EOF
-)
-    ;;
-  3)
-    QUIC_SETTINGS=$(cat <<EOF
-quic:
-  initStreamReceiveWindow: 100663296
-  maxStreamReceiveWindow: 201326592
+  initStreamReceiveWindow: 67108864
+  maxStreamReceiveWindow: 134217728
   initConnReceiveWindow: 201326592
   maxConnReceiveWindow: 402653184
-  maxIdleTimeout: 15s
+  maxIdleTimeout: 30s
   keepAliveInterval: 10s
-  maxIncomingStreams: 24576
-  disablePathMTUDiscovery: false
+  maxIncomingStreams: 65535
+  disablePathMTUDiscovery: true
+fastOpen: true
+lazy: true
+hopInterval: 30s
 EOF
 )
-    ;;
-  *)
-    echo "Invalid option. Defaulting to 1-50 users (light load)."
-    QUIC_SETTINGS=$(cat <<EOF
-quic:
-  initStreamReceiveWindow: 25165824
-  maxStreamReceiveWindow: 50331648
-  initConnReceiveWindow: 50331648
-  maxConnReceiveWindow: 100663296
-  maxIdleTimeout: 15s
-  keepAliveInterval: 10s
-  maxIncomingStreams: 4096
-  disablePathMTUDiscovery: false
+
+# ------------------ Fragmentation Option ------------------
+read -p "Do you want to enable TLS Fragmentation (anti-censorship)? [Y/n]: " ENABLE_FRAGMENT
+ENABLE_FRAGMENT=$(echo "$ENABLE_FRAGMENT" | tr '[:upper:]' '[:lower:]')
+
+if [[ "$ENABLE_FRAGMENT" != "n" && "$ENABLE_FRAGMENT" != "no" ]]; then
+  FRAGMENT_CONFIG=$(cat <<EOF
+tlsFragment:
+  enable: true
+  size: 100-300
+  sleep: 5-15
 EOF
 )
-    ;;
-esac
+else
+  FRAGMENT_CONFIG=""
+fi
 
 # ------------------ Foreign Server Setup ------------------
 if [ "$SERVER_TYPE" == "foreign" ]; then
@@ -438,11 +405,11 @@ if [ "$SERVER_TYPE" == "foreign" ]; then
     sudo apt update -y && sudo apt install -y openssl
   fi
 
-  colorEcho "Generating self-signed certificate..." cyan
+  colorEcho "Generating self-signed certificate (with popular SNI)..." cyan
   sudo openssl req -x509 -nodes -days 3650 -newkey ed25519 \
     -keyout /etc/hysteria/self.key \
     -out /etc/hysteria/self.crt \
-    -subj "/CN=myserver"
+    -subj "/CN=cdn.discordapp.com"
   sudo chmod 600 /etc/hysteria/self.*
 
   while true; do
@@ -473,12 +440,16 @@ auth:
   password: "$H_PASSWORD"
 $(echo "$OBFS_CONFIG" | sed "s/__REPLACE_PASSWORD__/$H_PASSWORD/")
 $(echo "$QUIC_SETTINGS")
+$(echo "$FRAGMENT_CONFIG")
 speedTest: true
+bandwidth:
+  up: 1 gbps
+  down: 1 gbps
 EOF
 
   cat << EOF | sudo tee /etc/systemd/system/hysteria.service > /dev/null
 [Unit]
-Description=Hysteria2 Tunnel Service
+Description=Hysteria2 Tunnel Service (Optimized)
 After=network.target
 
 [Service]
@@ -540,7 +511,8 @@ elif [ "$SERVER_TYPE" == "iran" ]; then
       fi
     done
 
-    read -p "SNI ex.(google.com): " SNI
+    echo "Popular SNI options: cdn.discordapp.com, images.unsplash.com, fonts.googleapis.com, www.cloudflare.com"
+    read -p "SNI ex.(cdn.discordapp.com): " SNI
     read -p "How many ports do you have for forwarding? ex.(1) " PORT_FORWARD_COUNT
 
     TCP_FORWARD=""
@@ -576,15 +548,19 @@ tls:
   insecure: true
 $(echo "$OBFS_CONFIG" | sed "s/__REPLACE_PASSWORD__/$PASSWORD/")
 $(echo "$QUIC_SETTINGS")
+$(echo "$FRAGMENT_CONFIG")
 tcpForwarding:
 $TCP_FORWARD
 udpForwarding:
 $UDP_FORWARD
+bandwidth:
+  up: 1 gbps
+  down: 1 gbps
 EOF
 
     cat << EOF | sudo tee "$SERVICE_FILE" > /dev/null
 [Unit]
-Description=Hysteria2 Client $i
+Description=Hysteria2 Client $i (Optimized)
 After=network.target
 
 [Service]
