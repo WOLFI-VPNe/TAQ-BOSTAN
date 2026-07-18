@@ -99,182 +99,156 @@ fi
 # Give hysteria user access to necessary directories
 sudo chown -R hysteria:hysteria /etc/hysteria/ /var/log/hysteria/
 
-if [ ! -f /etc/hysteria/hysteria-monitor.py ]; then
-  sudo curl -fsSL https://raw.githubusercontent.com/ParsaKSH/TAQ-BOSTAN/main/hysteria-monitor.py \
-    -o /etc/hysteria/hysteria-monitor.py
-  sudo chmod +x /etc/hysteria/hysteria-monitor.py
-  sudo chown hysteria:hysteria /etc/hysteria/hysteria-monitor.py
+# Install traffic monitor script (simple iptables-based)
+sudo tee /etc/hysteria/traffic_monitor.sh > /dev/null << 'TRAFFIC_MONITOR_EOF'
+#!/bin/bash
+
+# Simple iptables-based traffic monitor for hysteria
+# Saves traffic data to /etc/hysteria/traffic_data.json
+
+MAPPING_FILE="/etc/hysteria/port_mapping.txt"
+DATA_FILE="/etc/hysteria/traffic_data.json"
+
+# Ensure data file exists
+if [ ! -f "$DATA_FILE" ]; then
+  echo '{}' > "$DATA_FILE"
+  chown hysteria:hysteria "$DATA_FILE" 2>/dev/null || true
 fi
 
-# Install psutil for traffic monitoring
-if ! python3 -c "import psutil" 2>/dev/null; then
-  colorEcho "Installing psutil for traffic monitoring..." cyan
-  sudo apt-get update -qq
-  sudo apt-get install -y python3-psutil >/dev/null 2>&1
-fi
+# Function to read existing data
+read_data() {
+  if [ -f "$DATA_FILE" ]; then
+    cat "$DATA_FILE" 2>/dev/null || echo '{}'
+  else
+    echo '{}'
+  fi
+}
 
-# Install traffic monitor script
-cat > /tmp/traffic_monitor.py << 'TRAFFIC_MONITOR_EOF'
-#!/usr/bin/env python3
-import psutil
-import time
+# Function to write data
+write_data() {
+  echo "$1" > "$DATA_FILE"
+  chown hysteria:hysteria "$DATA_FILE" 2>/dev/null || true
+}
+
+# Function to update iptables rules
+update_iptables() {
+  local ports
+
+  # Clear old iptables rules for our chains
+  while iptables -t mangle -D INPUT -j HYSTERIA_TRAFFIC 2>/dev/null; do true; done
+  while iptables -t mangle -D OUTPUT -j HYSTERIA_TRAFFIC 2>/dev/null; do true; done
+  while iptables -t mangle -F HYSTERIA_TRAFFIC 2>/dev/null; do true; done
+  iptables -t mangle -X HYSTERIA_TRAFFIC 2>/dev/null || true
+  iptables -t mangle -N HYSTERIA_TRAFFIC 2>/dev/null || true
+
+  # Add main jump rules
+  iptables -t mangle -A INPUT -j HYSTERIA_TRAFFIC
+  iptables -t mangle -A OUTPUT -j HYSTERIA_TRAFFIC
+
+  # Read tunnel configs and add rules
+  if [ -f "$MAPPING_FILE" ]; then
+    while IFS='|' read -r cfg service port_str; do
+      name="${cfg##*iran-}"
+      name="${name%.yaml}"
+      [ -z "$name" ] && continue
+
+      # Create chain for this tunnel
+      iptables -t mangle -F "HYST_$name" 2>/dev/null || true
+      iptables -t mangle -X "HYST_$name" 2>/dev/null || true
+      iptables -t mangle -N "HYST_$name" 2>/dev/null || true
+      iptables -t mangle -A "HYST_$name" -j RETURN  # Counter lives here
+
+      # Split ports
+      IFS=',' read -ra ports <<< "$port_str"
+      for port in "${ports[@]}"; do
+        [ -z "$port" ] && continue
+        iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name"
+        iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -j "HYST_$name"
+        iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -j "HYST_$name"
+        iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -j "HYST_$name"
+      done
+    done < "$MAPPING_FILE"
+  fi
+}
+
+# Function to get traffic from iptables
+get_traffic() {
+  local name="$1"
+  local bytes=0
+
+  # Try to get bytes from iptables
+  local output
+  output=$(iptables -t mangle -L "HYST_$name" -v -n -x 2>/dev/null | grep -E '^[0-9]' | head -1)
+  if [ -n "$output" ]; then
+    bytes=$(echo "$output" | awk '{print $2}')
+  fi
+  echo "$bytes"
+}
+
+# Main loop
+echo "Starting traffic monitor..."
+
+# Initialize iptables
+update_iptables
+
+# Main loop
+while true; do
+  # Read current data
+  current_data=$(read_data)
+
+  # Update data
+  if [ -f "$MAPPING_FILE" ]; then
+    while IFS='|' read -r cfg service port_str; do
+      name="${cfg##*iran-}"
+      name="${name%.yaml}"
+      [ -z "$name" ] && continue
+
+      # Get new traffic from iptables
+      new_bytes=$(get_traffic "$name")
+      if [ -n "$new_bytes" ] && [ "$new_bytes" -gt 0 ] 2>/dev/null; then
+        # Update data
+        updated_data=$(python3 -c "
 import json
-import os
-import glob
+data = json.loads('''$current_data''')
+name = '''$name'''
+new_bytes = int('''$new_bytes''')
+if name not in data:
+    data[name] = {'total_rx': 0, 'total_tx': 0, 'last_bytes': 0}
+# Calculate delta
+delta = new_bytes - data[name]['last_bytes']
+if delta > 0:
+    data[name]['total_rx'] += delta // 2
+    data[name]['total_tx'] += delta // 2
+# Update last bytes
+data[name]['last_bytes'] = new_bytes
+print(json.dumps(data, indent=2))
+" 2>/dev/null || echo "$current_data")
+        current_data="$updated_data"
+      fi
+    done < "$MAPPING_FILE"
+  fi
 
-# Paths
-DATA_FILE = "/etc/hysteria/traffic_data.json"
-CONFIG_DIR = "/etc/hysteria"
+  # Write data
+  write_data "$current_data"
 
-
-def load_data():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-
-def save_data(data):
-    try:
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-        # Give everyone read access
-        os.chmod(DATA_FILE, 0o644)
-    except Exception as e:
-        print(f"Failed to save data: {e}")
-
-
-def get_tunnel_name_from_config_path(config_path):
-    """Extract tunnel name from config file path (e.g., iran-london.yaml -> london)"""
-    filename = os.path.basename(config_path)
-    if filename.startswith("iran-") and filename.endswith(".yaml"):
-        return filename[5:-5]
-    return None
-
-
-def find_hysteria_processes():
-    """Find all running Hysteria client processes and map them to tunnel names"""
-    tunnel_procs = {}
-    for proc in psutil.process_iter(["pid", "cmdline"]):
-        try:
-            cmdline = proc.info["cmdline"]
-            if not cmdline:
-                continue
-            # Check if it's a Hysteria client
-            if len(cmdline) >= 3 and cmdline[1] == "client" and cmdline[2].startswith(CONFIG_DIR):
-                config_path = cmdline[2]
-                tunnel_name = get_tunnel_name_from_config_path(config_path)
-                if tunnel_name:
-                    tunnel_procs[tunnel_name] = proc
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return tunnel_procs
-
-
-def log(message):
-    """Write a message to the log file"""
-    log_file = "/var/log/hysteria/traffic_monitor.log"
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        with open(log_file, "a") as f:
-            f.write(f"[{timestamp}] {message}\n")
-    except Exception:
-        pass
-
-
-def main():
-    # Create log directory if needed
-    os.makedirs("/var/log/hysteria", exist_ok=True)
-    
-    log("=== Starting traffic monitor ===")
-    # Initialize data file
-    data = load_data()
-
-    # Create data file directory if it doesn't exist
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-
-    # Main loop
-    while True:
-        log("--- Scanning processes ---")
-        # Get current tunnel processes
-        tunnel_procs = find_hysteria_processes()
-        log(f"Found {len(tunnel_procs)} tunnel(s): {list(tunnel_procs.keys())}")
-
-        # Update traffic data
-        for tunnel_name, proc in tunnel_procs.items():
-            try:
-                log(f"Processing tunnel: {tunnel_name} (PID {proc.pid})")
-                io_counters = proc.io_counters()
-                current_tx = io_counters.write_bytes
-                current_rx = io_counters.read_bytes
-                log(f"  Current RX: {current_rx}, TX: {current_tx}")
-
-                # Initialize entry if it doesn't exist
-                if tunnel_name not in data:
-                    data[tunnel_name] = {
-                        "total_rx": 0,
-                        "total_tx": 0,
-                        "last_rx": current_rx,
-                        "last_tx": current_tx,
-                        "last_update": time.time()
-                    }
-                    log(f"  Initialized new tunnel entry")
-
-                # Calculate delta
-                entry = data[tunnel_name]
-                delta_rx = current_rx - entry["last_rx"]
-                delta_tx = current_tx - entry["last_tx"]
-                log(f"  Delta RX: {delta_rx}, Delta TX: {delta_tx}")
-
-                # Update totals (only positive deltas to avoid rollbacks)
-                if delta_rx > 0:
-                    entry["total_rx"] += delta_rx
-                if delta_tx > 0:
-                    entry["total_tx"] += delta_tx
-                log(f"  Total RX: {entry['total_rx']}, Total TX: {entry['total_tx']}")
-
-                # Update last counters
-                entry["last_rx"] = current_rx
-                entry["last_tx"] = current_tx
-                entry["last_update"] = time.time()
-
-            except psutil.NoSuchProcess:
-                log(f"  Process {proc.pid} no longer exists")
-            except psutil.AccessDenied:
-                log(f"  Access denied to process {proc.pid}")
-            except Exception as e:
-                log(f"  Error processing tunnel {tunnel_name}: {type(e).__name__}: {e}")
-
-        # Save updated data
-        save_data(data)
-        log(f"Saved data: {json.dumps(data)}")
-
-        # Wait for next update
-        time.sleep(2)
-
-
-if __name__ == "__main__":
-    main()
+  # Sleep
+  sleep 2
+done
 TRAFFIC_MONITOR_EOF
 
-sudo mv /tmp/traffic_monitor.py /etc/hysteria/
-sudo chmod +x /etc/hysteria/traffic_monitor.py
-sudo chown hysteria:hysteria /etc/hysteria/traffic_monitor.py
+sudo chmod +x /etc/hysteria/traffic_monitor.sh
 
 # Create systemd service for traffic monitor
 sudo tee /etc/systemd/system/hysteria-traffic-monitor.service > /dev/null << 'EOF'
 [Unit]
-Description=Hysteria Traffic Monitor
+Description=Hysteria Traffic Monitor (iptables)
 After=network.target
 
 [Service]
 Type=simple
 User=root
 Group=root
-ExecStart=/usr/bin/python3 /etc/hysteria/traffic_monitor.py
+ExecStart=/bin/bash /etc/hysteria/traffic_monitor.sh
 Restart=always
 RestartSec=5
 
@@ -284,8 +258,8 @@ EOF
 
 # Reload systemd and start traffic monitor
 sudo systemctl daemon-reload
-sudo systemctl enable hysteria-traffic-monitor
-sudo systemctl start hysteria-traffic-monitor
+sudo systemctl enable hysteria-traffic-monitor 2>/dev/null
+sudo systemctl restart hysteria-traffic-monitor 2>/dev/null
 
 # ------------------ Manage Tunnels Function ------------------
 manage_tunnels() {
@@ -787,41 +761,22 @@ HTML_TEMPLATE_MAIN = """
       </header>
 
       <!-- Top Controls -->
-      <div class="flex flex-col lg:flex-row gap-4 mb-8">
-        <!-- Speed Test Button -->
-        <div class="glass-card rounded-2xl p-4 flex-1">
-          <h3 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            تست سرعت
-          </h3>
-          <div class="flex flex-col gap-3">
-            <button id="speedtest-btn" class="btn-primary w-full py-3 px-4 rounded-xl text-white font-semibold">
-              🚀 شروع تست سرعت
-            </button>
-            <div id="speedtest-result" class="text-sm text-slate-300 bg-slate-900/50 p-3 rounded-xl border border-slate-700 min-h-[40px]"></div>
-          </div>
-        </div>
-        
-        <!-- Auto Refresh -->
-        <div class="glass-card rounded-2xl p-4 flex-1">
-          <h3 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            به‌روزرسانی خودکار
-          </h3>
-          <div class="flex items-center gap-3">
-            <select id="refresh-interval" onchange="updateRefreshInterval()"
-                    class="flex-1 bg-slate-900/70 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="5">5 ثانیه</option>
-              <option value="10" selected>10 ثانیه</option>
-              <option value="30">30 ثانیه</option>
-              <option value="60">1 دقیقه</option>
-              <option value="0">خاموش</option>
-            </select>
-          </div>
+      <div class="glass-card rounded-2xl p-4 mb-8">
+        <h3 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          به‌روزرسانی خودکار
+        </h3>
+        <div class="flex items-center gap-3">
+          <select id="refresh-interval" onchange="updateRefreshInterval()"
+                  class="flex-1 bg-slate-900/70 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="5">5 ثانیه</option>
+            <option value="10" selected>10 ثانیه</option>
+            <option value="30">30 ثانیه</option>
+            <option value="60">1 دقیقه</option>
+            <option value="0">خاموش</option>
+          </select>
         </div>
       </div>
 
@@ -966,30 +921,8 @@ HTML_TEMPLATE_MAIN = """
       }
     }
 
-    async function runSpeedTest() {
-      const btn = document.getElementById('speedtest-btn');
-      const resultDiv = document.getElementById('speedtest-result');
-      
-      btn.disabled = true;
-      btn.textContent = '⏳ در حال تست...';
-      resultDiv.textContent = '';
-
-      try {
-        const response = await fetch('/speedtest');
-        const result = await response.text();
-        resultDiv.textContent = result;
-      } catch (error) {
-        resultDiv.textContent = 'خطا در تست سرعت: ' + error.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '🚀 شروع تست سرعت';
-      }
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
       updateRefreshInterval();
-      const speedBtn = document.getElementById('speedtest-btn');
-      if (speedBtn) speedBtn.addEventListener('click', runSpeedTest);
     });
   </script>
 </body>
@@ -1270,38 +1203,6 @@ def get_traffic_usage(name):
   except Exception:
     pass
   return "0 B"
-
-def run_speed_test():
-  try:
-    # Try to use speedtest-cli if available
-    result = subprocess.run(
-      ["speedtest-cli", "--simple"],
-      capture_output=True,
-      text=True,
-      timeout=60
-    )
-    if result.returncode == 0:
-      return result.stdout.strip()
-    else:
-      # Fallback: try a simple download test
-      import tempfile
-      import time
-      test_url = "https://speed.hetzner.de/100MB.bin"
-      start_time = time.time()
-      with tempfile.NamedTemporaryFile(delete=False) as f:
-        subprocess.run(
-          ["curl", "-L", "-o", f.name, test_url],
-          capture_output=True,
-          timeout=60
-        )
-      download_time = time.time() - start_time
-      file_size = 100 * 1024 * 1024  # 100 MB
-      speed_bps = (file_size * 8) / download_time
-      speed_mbps = speed_bps / (1024 * 1024)
-      return f"Download: {speed_mbps:.2f} Mbps"
-  except Exception as e:
-    return f"Speed test failed: {str(e)}"
-
 
 def parse_tunnel_config(config_path):
   try:
@@ -1680,16 +1581,6 @@ def reset_traffic(name):
   except Exception:
     pass
   return redirect(url_for('index'))
-
-@app.route('/speedtest')
-def speed_test():
-  if 'user_id' not in session:
-    return redirect(url_for('login'))
-  
-  # Only admins can run speed tests? Or allow all users? Let's allow all users
-  result = run_speed_test()
-  return result
-
 
 if __name__ == '__main__':
   app.run(host='0.0.0.0', port=3388, debug=False)
@@ -2680,42 +2571,8 @@ EOF
     | sudo tee -a "$MAPPING_FILE" > /dev/null
     colorEcho "Tunnel '${TUNNEL_NAME}' setup completed." green
   done
-# ====== Set up per-config iptables counters ======
-# Get UID of hysteria user
-HYSTERIA_UID=$(id -u hysteria)
-
-while IFS='|' read -r cfg service ports; do
-  name="${cfg##*iran-}"
-  name="${name%.yaml}"
-  chain="HYST${name}"
-  
-  # Create/flush chain
-  sudo iptables -t mangle -N "$chain" 2>/dev/null || sudo iptables -t mangle -F "$chain"
-  sudo iptables -t mangle -A "$chain" -j RETURN  # Counter is on this rule
-  
-  # For outgoing traffic from hysteria user: use owner module
-  sudo iptables -t mangle -A OUTPUT -m owner --uid-owner "$HYSTERIA_UID" -j "$chain"
-  
-  # For incoming traffic related to hysteria's outgoing connections: use conntrack
-  sudo iptables -t mangle -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j "$chain"
-done < "$MAPPING_FILE"
-
-sudo tee /etc/systemd/system/hysteria-monitor.service > /dev/null <<'EOF'
-[Unit]
-Description=Hysteria Monitor Service
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 /etc/hysteria/hysteria-monitor.py
-Restart=always
-RestartSec=10
-StandardOutput=file:/var/log/hysteria/monitor.log
-StandardError=file:/var/log/hysteria/monitor.err
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# Restart traffic monitor to update iptables rules for new tunnels
+sudo systemctl restart hysteria-traffic-monitor 2>/dev/null || true
 
 # --- Install Web Management Interface ---
 colorEcho "Setting up Web Management Interface on port 3388..." cyan
@@ -2739,9 +2596,6 @@ if [ -f "hysteria-web.service" ]; then
 fi
 
 sudo systemctl daemon-reload
-sudo systemctl enable hysteria-monitor
-sudo systemctl start hysteria-monitor
-
 
   colorEcho "All tunnels set up successfully." green
   colorEcho "Web Management Interface is available at http://YOUR_SERVER_IP:3388" green
