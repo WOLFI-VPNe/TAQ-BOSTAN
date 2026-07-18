@@ -91,10 +91,19 @@ if [ ! -f "$MAPPING_FILE" ]; then
 fi
 sudo mkdir -p /var/log/hysteria/
 
+# Create dedicated hysteria user if it doesn't exist
+if ! id -u hysteria >/dev/null 2>&1; then
+  sudo useradd -r -s /usr/sbin/nologin hysteria
+  colorEcho "Created dedicated 'hysteria' user." green
+fi
+# Give hysteria user access to necessary directories
+sudo chown -R hysteria:hysteria /etc/hysteria/ /var/log/hysteria/
+
 if [ ! -f /etc/hysteria/hysteria-monitor.py ]; then
   sudo curl -fsSL https://raw.githubusercontent.com/ParsaKSH/TAQ-BOSTAN/main/hysteria-monitor.py \
     -o /etc/hysteria/hysteria-monitor.py
   sudo chmod +x /etc/hysteria/hysteria-monitor.py
+  sudo chown hysteria:hysteria /etc/hysteria/hysteria-monitor.py
 fi
 
 # ------------------ Manage Tunnels Function ------------------
@@ -1171,19 +1180,37 @@ def format_bytes(bytes_val):
 
 def get_traffic_usage(name):
   try:
-    chain_name = f"HYST{name}"
-    result = subprocess.run(
-      ["iptables", "-t", "mangle", "-L", chain_name, "-v", "-n", "-x"],
-      capture_output=True,
-      text=True
-    )
-    if result.returncode == 0:
-      lines = result.stdout.strip().split('\n')
-      if len(lines) >= 3:
-        parts = lines[2].split()
-        if len(parts) >= 2:
-          bytes_used = int(parts[1])
-          return format_bytes(bytes_used)
+    # Read metrics port from file
+    metrics_port = None
+    with open("/etc/hysteria/metrics_ports.txt", "r") as f:
+      for line in f:
+        line = line.strip()
+        if not line:
+          continue
+        parts = line.split(":", 1)
+        if len(parts) == 2 and parts[0] == name:
+          metrics_port = parts[1]
+          break
+    if not metrics_port:
+      return "0 B"
+    
+    # Fetch metrics from Hysteria's API
+    import urllib.request
+    url = f"http://127.0.0.1:{metrics_port}/metrics"
+    with urllib.request.urlopen(url, timeout=2) as response:
+      metrics = response.read().decode("utf-8")
+    
+    # Parse rx and tx bytes
+    rx_bytes = 0
+    tx_bytes = 0
+    for line in metrics.split("\n"):
+      if line.startswith("hysteria_traffic_bytes_rx_total"):
+        rx_bytes = int(float(line.split()[-1]))
+      elif line.startswith("hysteria_traffic_bytes_tx_total"):
+        tx_bytes = int(float(line.split()[-1]))
+    
+    total_bytes = rx_bytes + tx_bytes
+    return format_bytes(total_bytes)
   except Exception:
     pass
   return "0 B"
@@ -1583,8 +1610,8 @@ def reset_traffic(name):
     return redirect(url_for('index'))
 
   try:
-    chain_name = f"HYST{name}"
-    subprocess.run(["iptables", "-t", "mangle", "-Z", chain_name], check=True)
+    # Restart the tunnel to reset Hysteria's metrics
+    subprocess.run(["systemctl", "restart", f"hysteria-{name}"], check=True)
   except Exception:
     pass
   return redirect(url_for('index'))
@@ -2441,12 +2468,14 @@ After=network.target
 
 [Service]
 Type=simple
+User=hysteria
+Group=hysteria
 ExecStart=/usr/local/bin/hysteria server -c /etc/hysteria/server-config.yaml
 Restart=always
 RestartSec=5
 LimitNOFILE=1048576
-StandardOutput=file:/var/log/hysteria.log
-StandardError=file:/var/log/hysteria.err
+StandardOutput=file:/var/log/hysteria/hysteria.log
+StandardError=file:/var/log/hysteria/hysteria.err
 
 [Install]
 WantedBy=multi-user.target
@@ -2527,6 +2556,8 @@ elif [ "$SERVER_TYPE" == "iran" ]; then
     # Create configuration and service files for each tunnel
     CONFIG_FILE="/etc/hysteria/iran-${TUNNEL_NAME}.yaml"
     SERVICE_FILE="/etc/systemd/system/hysteria-${TUNNEL_NAME}.service"
+    # Generate a unique metrics port for this tunnel (use a simple hash of the tunnel name)
+    METRICS_PORT=$((20000 + $(echo -n "$TUNNEL_NAME" | cksum | awk '{print $1}') % 10000))
 
     cat << EOF | sudo tee "$CONFIG_FILE" > /dev/null
 server: "$SERVER_ADDRESS:$PORT"
@@ -2540,7 +2571,11 @@ tcpForwarding:
 $TCP_FORWARD
 udpForwarding:
 $UDP_FORWARD
+metrics:
+  listen: "127.0.0.1:$METRICS_PORT"
 EOF
+    # Save the metrics port for later use
+    echo "$TUNNEL_NAME:$METRICS_PORT" | sudo tee -a /etc/hysteria/metrics_ports.txt > /dev/null
 
     cat << EOF | sudo tee "$SERVICE_FILE" > /dev/null
 [Unit]
@@ -2549,12 +2584,14 @@ After=network.target
 
 [Service]
 Type=simple
+User=hysteria
+Group=hysteria
 ExecStart=/usr/local/bin/hysteria client -c $CONFIG_FILE
 Restart=always
 RestartSec=5
 LimitNOFILE=1048576
-StandardOutput=file:/var/log/hysteria-${TUNNEL_NAME}.log
-StandardError=file:/var/log/hysteria-${TUNNEL_NAME}.err
+StandardOutput=file:/var/log/hysteria/hysteria-${TUNNEL_NAME}.log
+StandardError=file:/var/log/hysteria/hysteria-${TUNNEL_NAME}.err
 
 [Install]
 WantedBy=multi-user.target
@@ -2572,25 +2609,23 @@ EOF
     colorEcho "Tunnel '${TUNNEL_NAME}' setup completed." green
   done
 # ====== Set up per-config iptables counters ======
+# Get UID of hysteria user
+HYSTERIA_UID=$(id -u hysteria)
+
 while IFS='|' read -r cfg service ports; do
   name="${cfg##*iran-}"
   name="${name%.yaml}"
   chain="HYST${name}"
+  
+  # Create/flush chain
   sudo iptables -t mangle -N "$chain" 2>/dev/null || sudo iptables -t mangle -F "$chain"
-  # Add a rule to count all traffic in this chain
-  sudo iptables -t mangle -A "$chain" -j RETURN  # This rule will have the byte counter
-  IFS=',' read -ra PARR <<< "$ports"
-  for p in "${PARR[@]}"; do
-    # Add INPUT and OUTPUT rules for both TCP and UDP, using both --dport and --sport
-    sudo iptables -t mangle -A INPUT -p tcp --dport "$p" -j "$chain"
-    sudo iptables -t mangle -A INPUT -p tcp --sport "$p" -j "$chain"
-    sudo iptables -t mangle -A INPUT -p udp --dport "$p" -j "$chain"
-    sudo iptables -t mangle -A INPUT -p udp --sport "$p" -j "$chain"
-    sudo iptables -t mangle -A OUTPUT -p tcp --dport "$p" -j "$chain"
-    sudo iptables -t mangle -A OUTPUT -p tcp --sport "$p" -j "$chain"
-    sudo iptables -t mangle -A OUTPUT -p udp --dport "$p" -j "$chain"
-    sudo iptables -t mangle -A OUTPUT -p udp --sport "$p" -j "$chain"
-  done
+  sudo iptables -t mangle -A "$chain" -j RETURN  # Counter is on this rule
+  
+  # For outgoing traffic from hysteria user: use owner module
+  sudo iptables -t mangle -A OUTPUT -m owner --uid-owner "$HYSTERIA_UID" -j "$chain"
+  
+  # For incoming traffic related to hysteria's outgoing connections: use conntrack
+  sudo iptables -t mangle -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j "$chain"
 done < "$MAPPING_FILE"
 
 sudo tee /etc/systemd/system/hysteria-monitor.service > /dev/null <<'EOF'
