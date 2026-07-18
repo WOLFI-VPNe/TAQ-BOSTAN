@@ -841,6 +841,7 @@ HTML_TEMPLATE_MAIN = """
             {% endfor %}
           </div>
         </div>
+        {% if is_admin %}
         <div class="actions">
           {% if tunnel.status == 'inactive' %}
           <a href="{{ url_for('start_tunnel', name=tunnel.name) }}" class="btn btn-start">▶️ شروع</a>
@@ -851,6 +852,7 @@ HTML_TEMPLATE_MAIN = """
           <a href="{{ url_for('view_logs', name=tunnel.name) }}" class="btn" style="background:linear-gradient(135deg, #667eea, #764ba2);color:white;">📋 لاگ‌ها</a>
           <a href="{{ url_for('reset_traffic', name=tunnel.name) }}" class="btn" style="background:linear-gradient(135deg, #8b5cf6, #7c3aed);color:white;">🔢 ریست ترافیک</a>
         </div>
+        {% endif %}
         {% if tunnel.show_logs %}
         <div class="logs-section">{{ tunnel.logs }}</div>
         {% endif %}
@@ -1410,6 +1412,16 @@ def start_tunnel(name):
   if 'user_id' not in session:
     return redirect(url_for('login'))
 
+  # Check if user is admin
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  cursor.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],))
+  user = cursor.fetchone()
+  conn.close()
+
+  if not user or not user['is_admin']:
+    return redirect(url_for('index'))
+
   try:
     subprocess.run(["systemctl", "start", f"hysteria-{name}"], check=True)
   except Exception:
@@ -1422,6 +1434,16 @@ def stop_tunnel(name):
   if 'user_id' not in session:
     return redirect(url_for('login'))
 
+  # Check if user is admin
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  cursor.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],))
+  user = cursor.fetchone()
+  conn.close()
+
+  if not user or not user['is_admin']:
+    return redirect(url_for('index'))
+
   try:
     subprocess.run(["systemctl", "stop", f"hysteria-{name}"], check=True)
   except Exception:
@@ -1433,6 +1455,16 @@ def stop_tunnel(name):
 def restart_tunnel(name):
   if 'user_id' not in session:
     return redirect(url_for('login'))
+
+  # Check if user is admin
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  cursor.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],))
+  user = cursor.fetchone()
+  conn.close()
+
+  if not user or not user['is_admin']:
+    return redirect(url_for('index'))
 
   try:
     subprocess.run(["systemctl", "restart", f"hysteria-{name}"], check=True)
@@ -1452,7 +1484,7 @@ def view_logs(name):
   user = cursor.fetchone()
   conn.close()
 
-  if not user:
+  if not user or not user['is_admin']:
     return redirect(url_for('index'))
 
   tunnels = get_user_tunnels(session['user_id'], user['is_admin'])
@@ -1480,6 +1512,16 @@ def view_logs(name):
 def reset_traffic(name):
   if 'user_id' not in session:
     return redirect(url_for('login'))
+
+  # Check if user is admin
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  cursor.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],))
+  user = cursor.fetchone()
+  conn.close()
+
+  if not user or not user['is_admin']:
+    return redirect(url_for('index'))
 
   try:
     chain_name = f"HYST{name}"
