@@ -103,6 +103,7 @@ sudo chown -R hysteria:hysteria /etc/hysteria/ /var/log/hysteria/
 sudo tee /etc/hysteria/setup_iptables.sh > /dev/null << 'IPTABLES_EOF'
 #!/bin/bash
 MAPPING_FILE="/etc/hysteria/port_mapping.txt"
+WEB_PORT=3388
 
 # Clear old rules
 for chain in $(iptables -t mangle -L -n 2>/dev/null | grep '^Chain' | awk '{print $2}' | grep '^HYST_'); do
@@ -114,6 +115,14 @@ iptables -t mangle -X HYSTERIA_TRAFFIC 2>/dev/null
 
 # Create main chain
 iptables -t mangle -N HYSTERIA_TRAFFIC
+
+# EXCLUDE WEB MANAGER PORT FIRST (so it's NOT counted!)
+iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport $WEB_PORT -j RETURN
+iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport $WEB_PORT -j RETURN
+iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport $WEB_PORT -j RETURN
+iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport $WEB_PORT -j RETURN
+
+# Hook into INPUT and OUTPUT chains
 iptables -t mangle -A INPUT -j HYSTERIA_TRAFFIC
 iptables -t mangle -A OUTPUT -j HYSTERIA_TRAFFIC
 
@@ -136,7 +145,7 @@ if [ -f "$MAPPING_FILE" ]; then
     done < "$MAPPING_FILE"
 fi
 
-echo "Iptables rules updated!"
+echo "Iptables rules updated! (Web port excluded)"
 IPTABLES_EOF
 
 sudo chmod +x /etc/hysteria/setup_iptables.sh
