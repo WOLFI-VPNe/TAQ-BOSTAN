@@ -2245,7 +2245,7 @@ manage_gre() {
         echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p
 
-        # Create systemd service to bring GRE up on boot
+        # Create systemd service to bring GRE up on boot (fixed!)
         sudo tee /etc/systemd/system/gre-tunnel.service > /dev/null <<EOF
 [Unit]
 Description=GRE Tunnel
@@ -2254,11 +2254,16 @@ After=network.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# First clean up existing tunnel if present
+ExecStartPre=/sbin/ip link set gre1 down 2>/dev/null || true
+ExecStartPre=/sbin/ip tunnel del gre1 2>/dev/null || true
+# Then create and configure
 ExecStart=/sbin/ip tunnel add gre1 mode gre local $IRAN_PUB_IP remote $FOREIGN_PUB_IP ttl 255
 ExecStart=/sbin/ip addr add $IRAN_GRE_IP/30 dev gre1
 ExecStart=/sbin/ip link set gre1 up
-ExecStop=/sbin/ip link set gre1 down
-ExecStop=/sbin/ip tunnel del gre1
+# Cleanup on stop
+ExecStop=/sbin/ip link set gre1 down 2>/dev/null || true
+ExecStop=/sbin/ip tunnel del gre1 2>/dev/null || true
 
 [Install]
 WantedBy=multi-user.target
