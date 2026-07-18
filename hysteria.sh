@@ -238,10 +238,22 @@ manage_tunnels() {
         read -rp "Enter new server address (or press Enter to keep current): " NEW_SERVER
         read -rp "Enter new password       (or press Enter to keep current): " NEW_PASSWORD
         read -rp "Enter new SNI            (or press Enter to keep current): " NEW_SNI
+        read -rp "Enter new local IP       (or press Enter to keep current): " NEW_LOCAL_IP
 
         [ -n "$NEW_SERVER"   ] && sed -i "s|server: .*|server: \"$NEW_SERVER\"|"   "$cfg"
         [ -n "$NEW_PASSWORD" ] && sed -i "s|auth: .*|auth: \"$NEW_PASSWORD\"|"     "$cfg"
         [ -n "$NEW_SNI"      ] && sed -i "s|sni: .*|sni: \"$NEW_SNI\"|"           "$cfg"
+        
+        if [ -n "$NEW_LOCAL_IP" ]; then
+          # Check if it's IPv6 (contains :)
+          if [[ "$NEW_LOCAL_IP" == *":"* ]]; then
+            # Wrap in brackets
+            NEW_LOCAL_IP="[$NEW_LOCAL_IP]"
+          fi
+          # Replace all listen addresses in config
+          sed -i "s|listen: .*|listen: ${NEW_LOCAL_IP}:|g" "$cfg"
+          sed -i "s|remote: '.*:|remote: '${NEW_LOCAL_IP}:|g" "$cfg"
+        fi
 
         systemctl restart "hysteria-${TUNNEL_NAME}"
         colorEcho "Tunnel '${TUNNEL_NAME}' updated and restarted." green
@@ -2343,22 +2355,37 @@ collect_ports() {
   echo "${collected_ports[@]}"
 }
 
-# ------------------ IP Version Menu (Only for Iran) ------------------
+# ------------------ Local IP Selection (Only for Iran) ------------------
 if [ "$SERVER_TYPE" == "iran" ]; then
   while true; do
-    draw_menu "IP Version Selection" \
-      "1 | IPv4" \
-      "2 | IPv6" \
+    draw_menu "Local IP Selection" \
+      "1 | Enter IPv4 manually" \
+      "2 | Enter IPv6 manually" \
       "3 | Exit"
     read -r IP_VERSION_CHOICE
 
     case "$IP_VERSION_CHOICE" in
       1)
-        REMOTE_IP="0.0.0.0"
+        while true; do
+          read -rp "Enter your local IPv4 address (e.g., 192.168.1.100): " REMOTE_IP
+          if [[ "$REMOTE_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            break
+          else
+            colorEcho "Invalid IPv4 address! Please try again." red
+          fi
+        done
         break
         ;;
       2)
-        REMOTE_IP="[::]"
+        while true; do
+          read -rp "Enter your local IPv6 address (e.g., fdca:3c6e:69e8::1): " REMOTE_IP
+          if [[ "$REMOTE_IP" =~ ^[0-9a-fA-F:.]+$ ]]; then
+            REMOTE_IP="[${REMOTE_IP}]"
+            break
+          else
+            colorEcho "Invalid IPv6 address! Please try again." red
+          fi
+        done
         break
         ;;
       3)
