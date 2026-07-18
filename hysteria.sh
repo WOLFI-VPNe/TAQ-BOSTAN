@@ -705,17 +705,26 @@ HTML_TEMPLATE_MAIN = """
         </div>
       </header>
 
-      <!-- Top Controls -->
-      <div class="glass-card rounded-2xl p-4 mb-8">
-        <h3 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          به‌روزرسانی خودکار
-        </h3>
-        <div class="flex items-center gap-3">
+      <!-- Total Traffic & Top Controls -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="glass-card rounded-2xl p-6 md:col-span-2">
+          <h3 class="text-slate-300 font-semibold mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h2" />
+            </svg>
+            ترافیک کل مصرفی
+          </h3>
+          <p class="text-4xl font-bold text-white">{{ total_traffic }}</p>
+        </div>
+        <div class="glass-card rounded-2xl p-6">
+          <h3 class="text-slate-300 font-semibold mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            به‌روزرسانی خودکار
+          </h3>
           <select id="refresh-interval" onchange="updateRefreshInterval()"
-                  class="flex-1 bg-slate-900/70 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  class="w-full bg-slate-900/70 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             <option value="5">5 ثانیه</option>
             <option value="10" selected>10 ثانیه</option>
             <option value="30">30 ثانیه</option>
@@ -755,7 +764,7 @@ HTML_TEMPLATE_MAIN = """
             </div>
 
             <!-- Tunnel Info -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
               <div class="stat-card rounded-xl p-4">
                 <p class="text-slate-400 text-xs mb-1">SNI</p>
                 <p class="text-lg font-semibold text-white">{{ tunnel.sni }}</p>
@@ -769,6 +778,20 @@ HTML_TEMPLATE_MAIN = """
                 <p class="text-lg font-semibold {{ 'text-emerald-400' if tunnel.status == 'active' else 'text-red-400' }}">
                   {{ tunnel.status_text }}
                 </p>
+              </div>
+              <div class="stat-card rounded-xl p-4">
+                {% if tunnel.limit_bytes > 0 %}
+                  <p class="text-slate-400 text-xs mb-1">محدودیت حجم</p>
+                  <p class="text-lg font-semibold {{ 'text-red-400' if tunnel.limit_used else 'text-amber-300' }}">
+                    {{ tunnel.traffic }} / {{ tunnel.limit_bytes|filesizeformat }}
+                  </p>
+                  {% if tunnel.limit_used %}
+                    <p class="text-red-400 text-xs mt-1 font-bold">⚠️ محدودیت تمام شده!</p>
+                  {% endif %}
+                {% else %}
+                  <p class="text-slate-400 text-xs mb-1">محدودیت حجم</p>
+                  <p class="text-lg font-semibold text-slate-300">بدون محدودیت</p>
+                {% endif %}
               </div>
             </div>
 
@@ -823,6 +846,25 @@ HTML_TEMPLATE_MAIN = """
               <a href="{{ url_for('reset_traffic', name=tunnel.name) }}" class="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-slate-700/70 border border-slate-600 hover:bg-slate-700 transition">
                 🔢 ریست ترافیک
               </a>
+            </div>
+
+            <!-- Limit Controls -->
+            <div class="mt-4 pt-4 border-t border-slate-700/50">
+              <form method="post" action="{{ url_for('set_limit', name=tunnel.name) }}" class="flex flex-wrap gap-3 items-center">
+                <label class="text-slate-300 text-sm font-medium">محدودیت حجم (GB):</label>
+                <input type="number" name="limit_gb" step="0.1" min="0"
+                       value="{{ (tunnel.limit_bytes / (1024*1024*1024)) if tunnel.limit_bytes > 0 else '' }}"
+                       class="w-32 bg-slate-900/70 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                       placeholder="مثلاً 10">
+                <button type="submit" class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold text-white">
+                  ذخیره محدودیت
+                </button>
+                {% if tunnel.limit_bytes > 0 %}
+                <a href="{{ url_for('remove_limit', name=tunnel.name) }}" class="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-slate-700/70 border border-slate-600 hover:bg-slate-700 transition">
+                  حذف محدودیت
+                </a>
+                {% endif %}
+              </form>
             </div>
             {% endif %}
 
@@ -1136,33 +1178,39 @@ def format_bytes(bytes_val):
   return f"{bytes_val:.2f} PB"
 
 
+def get_traffic_bytes(name):
+    try:
+        chain_name = f"HYST_{name}"
+        result = subprocess.run(
+            ["iptables", "-t", "mangle", "-L", chain_name, "-v", "-n", "-x"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                stripped = line.strip()
+                if stripped and stripped[0].isdigit():
+                    parts = stripped.split()
+                    if len(parts) >= 2:
+                        return int(parts[1])
+    except Exception:
+        pass
+    return 0
+
 def get_traffic_usage(name):
-  try:
-    # ULTRA SIMPLE: Use iptables -L -v -n -x and parse directly
-    chain_name = f"HYST_{name}"
-    result = subprocess.run(
-      ["iptables", "-t", "mangle", "-L", chain_name, "-v", "-n", "-x"],
-      capture_output=True,
-      text=True
-    )
-    if result.returncode == 0:
-      # Split output into lines
-      output_lines = result.stdout.splitlines()
-      # Find first line that starts with a number (the counter line)
-      for line in output_lines:
-        stripped = line.strip()
-        if stripped and stripped[0].isdigit():
-          # Split into parts, second part is bytes
-          parts = stripped.split()
-          if len(parts) >= 2:
-            try:
-              total_bytes = int(parts[1])
-              return format_bytes(total_bytes)
-            except:
-              pass
-  except Exception:
-    pass
-  return "0 B"
+    bytes_used = get_traffic_bytes(name)
+    return format_bytes(bytes_used)
+
+def load_limits():
+    try:
+        with open("/etc/hysteria/limits.json", "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_limits(limits):
+    with open("/etc/hysteria/limits.json", "w") as f:
+        json.dump(limits, f, indent=2)
 
 def parse_tunnel_config(config_path):
   try:
@@ -1245,11 +1293,25 @@ def index():
     return redirect(url_for('login'))
 
   tunnels = get_user_tunnels(session['user_id'], user['is_admin'])
+  limits = load_limits()
+
+  total_bytes = 0
+  tunnel_list = []
+  for tunnel in tunnels:
+      tunnel_bytes = get_traffic_bytes(tunnel['name'])
+      total_bytes += tunnel_bytes
+      tunnel['bytes_used'] = tunnel_bytes
+      tunnel['limit_bytes'] = limits.get(tunnel['name'], 0)
+      tunnel['limit_used'] = False
+      if tunnel['limit_bytes'] > 0 and tunnel_bytes >= tunnel['limit_bytes']:
+          tunnel['limit_used'] = True
+      tunnel_list.append(tunnel)
 
   return render_template_string(HTML_TEMPLATE_MAIN,
                               username=user['username'],
                               is_admin=user['is_admin'],
-                              tunnels=tunnels)
+                              tunnels=tunnel_list,
+                              total_traffic=format_bytes(total_bytes))
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -1535,6 +1597,55 @@ def reset_traffic(name):
     subprocess.run(["iptables", "-t", "mangle", "-A", chain_name, "-j", "RETURN"], capture_output=True)
   except Exception:
     pass
+  return redirect(url_for('index'))
+
+@app.route('/set_limit/<name>', methods=['POST'])
+def set_limit(name):
+  if 'user_id' not in session:
+    return redirect(url_for('login'))
+
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  cursor.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],))
+  user = cursor.fetchone()
+  conn.close()
+
+  if not user or not user['is_admin']:
+    return redirect(url_for('index'))
+
+  try:
+    limit_gb = float(request.form['limit_gb'])
+    limit_bytes = int(limit_gb * 1024 * 1024 * 1024)
+    limits = load_limits()
+    limits[name] = limit_bytes
+    save_limits(limits)
+  except:
+    pass
+
+  return redirect(url_for('index'))
+
+@app.route('/remove_limit/<name>')
+def remove_limit(name):
+  if 'user_id' not in session:
+    return redirect(url_for('login'))
+
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  cursor.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],))
+  user = cursor.fetchone()
+  conn.close()
+
+  if not user or not user['is_admin']:
+    return redirect(url_for('index'))
+
+  try:
+    limits = load_limits()
+    if name in limits:
+        del limits[name]
+        save_limits(limits)
+  except:
+    pass
+
   return redirect(url_for('index'))
 
 if __name__ == '__main__':
