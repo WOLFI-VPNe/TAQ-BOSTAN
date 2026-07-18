@@ -792,6 +792,13 @@ HTML_TEMPLATE_MAIN = """
       </div>
     </div>
 
+    <div style="text-align: center; margin-bottom: 20px;">
+      <button id="speedtest-btn" class="btn" style="background: linear-gradient(135deg, #10b981, #059669);">
+        🚀 تست سرعت
+      </button>
+      <div id="speedtest-result" style="margin-top: 10px; color: #e5e7eb;"></div>
+    </div>
+
     <div class="refresh-toggle">
       <label for="refresh-interval">فاصله زمانی به‌روزرسانی:</label>
       <select id="refresh-interval" onchange="updateRefreshInterval()">
@@ -885,8 +892,29 @@ HTML_TEMPLATE_MAIN = """
       }
     }
 
+    async function runSpeedTest() {
+      const btn = document.getElementById('speedtest-btn');
+      const resultDiv = document.getElementById('speedtest-result');
+      
+      btn.disabled = true;
+      btn.textContent = '⏳ در حال تست...';
+      resultDiv.textContent = '';
+
+      try {
+        const response = await fetch('/speedtest');
+        const result = await response.text();
+        resultDiv.textContent = result;
+      } catch (error) {
+        resultDiv.textContent = 'خطا در تست سرعت: ' + error.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 تست سرعت';
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       updateRefreshInterval();
+      document.getElementById('speedtest-btn').addEventListener('click', runSpeedTest);
     });
   </script>
 </body>
@@ -1159,6 +1187,37 @@ def get_traffic_usage(name):
   except Exception:
     pass
   return "0 B"
+
+def run_speed_test():
+  try:
+    # Try to use speedtest-cli if available
+    result = subprocess.run(
+      ["speedtest-cli", "--simple"],
+      capture_output=True,
+      text=True,
+      timeout=60
+    )
+    if result.returncode == 0:
+      return result.stdout.strip()
+    else:
+      # Fallback: try a simple download test
+      import tempfile
+      import time
+      test_url = "https://speed.hetzner.de/100MB.bin"
+      start_time = time.time()
+      with tempfile.NamedTemporaryFile(delete=False) as f:
+        subprocess.run(
+          ["curl", "-L", "-o", f.name, test_url],
+          capture_output=True,
+          timeout=60
+        )
+      download_time = time.time() - start_time
+      file_size = 100 * 1024 * 1024  # 100 MB
+      speed_bps = (file_size * 8) / download_time
+      speed_mbps = speed_bps / (1024 * 1024)
+      return f"Download: {speed_mbps:.2f} Mbps"
+  except Exception as e:
+    return f"Speed test failed: {str(e)}"
 
 
 def parse_tunnel_config(config_path):
@@ -1529,6 +1588,15 @@ def reset_traffic(name):
   except Exception:
     pass
   return redirect(url_for('index'))
+
+@app.route('/speedtest')
+def speed_test():
+  if 'user_id' not in session:
+    return redirect(url_for('login'))
+  
+  # Only admins can run speed tests? Or allow all users? Let's allow all users
+  result = run_speed_test()
+  return result
 
 
 if __name__ == '__main__':
@@ -2509,14 +2577,18 @@ while IFS='|' read -r cfg service ports; do
   name="${name%.yaml}"
   chain="HYST${name}"
   sudo iptables -t mangle -N "$chain" 2>/dev/null || sudo iptables -t mangle -F "$chain"
-  # Add a rule to count all traffic in this chain (use -j ACCEPT or just -j RETURN, but the counter is on the rule)
+  # Add a rule to count all traffic in this chain
   sudo iptables -t mangle -A "$chain" -j RETURN  # This rule will have the byte counter
   IFS=',' read -ra PARR <<< "$ports"
   for p in "${PARR[@]}"; do
-    # Also add INPUT chain rules for incoming traffic to the local ports
+    # Add INPUT and OUTPUT rules for both TCP and UDP, using both --dport and --sport
     sudo iptables -t mangle -A INPUT -p tcp --dport "$p" -j "$chain"
+    sudo iptables -t mangle -A INPUT -p tcp --sport "$p" -j "$chain"
     sudo iptables -t mangle -A INPUT -p udp --dport "$p" -j "$chain"
+    sudo iptables -t mangle -A INPUT -p udp --sport "$p" -j "$chain"
+    sudo iptables -t mangle -A OUTPUT -p tcp --dport "$p" -j "$chain"
     sudo iptables -t mangle -A OUTPUT -p tcp --sport "$p" -j "$chain"
+    sudo iptables -t mangle -A OUTPUT -p udp --dport "$p" -j "$chain"
     sudo iptables -t mangle -A OUTPUT -p udp --sport "$p" -j "$chain"
   done
 done < "$MAPPING_FILE"
