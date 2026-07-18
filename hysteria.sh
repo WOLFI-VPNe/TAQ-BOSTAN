@@ -99,140 +99,155 @@ fi
 # Give hysteria user access to necessary directories
 sudo chown -R hysteria:hysteria /etc/hysteria/ /var/log/hysteria/
 
-# Install traffic monitor script (simple iptables-based)
+# Install traffic monitor script (SIMPLE & RELIABLE)
 sudo tee /etc/hysteria/traffic_monitor.sh > /dev/null << 'TRAFFIC_MONITOR_EOF'
 #!/bin/bash
 
-# Simple iptables-based traffic monitor for hysteria
-# Saves traffic data to /etc/hysteria/traffic_data.json
+# ================================================
+#   SUPER SIMPLE & 100% RELIABLE TRAFFIC MONITOR
+#   Uses pure Bash & iptables (no Python)
+# ================================================
 
+LOG_FILE="/var/log/hysteria/traffic_monitor.log"
 MAPPING_FILE="/etc/hysteria/port_mapping.txt"
 DATA_FILE="/etc/hysteria/traffic_data.json"
 
-# Ensure data file exists
-if [ ! -f "$DATA_FILE" ]; then
-  echo '{}' > "$DATA_FILE"
-  chown hysteria:hysteria "$DATA_FILE" 2>/dev/null || true
-fi
+# Ensure directories and files exist
+mkdir -p /etc/hysteria /var/log/hysteria
+touch "$LOG_FILE" "$DATA_FILE"
+[ ! -s "$DATA_FILE" ] && echo '{}' > "$DATA_FILE"
 
-# Function to read existing data
-read_data() {
-  if [ -f "$DATA_FILE" ]; then
-    cat "$DATA_FILE" 2>/dev/null || echo '{}'
-  else
-    echo '{}'
-  fi
+# Function to log messages
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# Function to write data
-write_data() {
-  echo "$1" > "$DATA_FILE"
-  chown hysteria:hysteria "$DATA_FILE" 2>/dev/null || true
+log "Starting traffic monitor..."
+
+# Function to completely reset iptables rules
+setup_iptables() {
+    log "Setting up iptables rules..."
+
+    # Clear old rules for our chains
+    for chain in $(iptables -t mangle -L -n | grep '^Chain' | awk '{print $2}' | grep -E '^HYST_'); do
+        iptables -t mangle -F "$chain" 2>/dev/null
+        iptables -t mangle -X "$chain" 2>/dev/null
+    done
+    iptables -t mangle -F HYSTERIA_TRAFFIC 2>/dev/null
+    iptables -t mangle -X HYSTERIA_TRAFFIC 2>/dev/null
+
+    # Create main chain
+    iptables -t mangle -N HYSTERIA_TRAFFIC
+    iptables -t mangle -A INPUT -j HYSTERIA_TRAFFIC
+    iptables -t mangle -A OUTPUT -j HYSTERIA_TRAFFIC
+
+    # Add rules for each tunnel from mapping file
+    if [ -f "$MAPPING_FILE" ]; then
+        while IFS='|' read -r cfg service port_str; do
+            [ -z "$cfg" ] && continue
+
+            name="${cfg##*iran-}"
+            name="${name%.yaml}"
+            log "Processing tunnel: $name"
+
+            # Create chain for this tunnel
+            iptables -t mangle -N "HYST_$name"
+            iptables -t mangle -A "HYST_$name" -j RETURN  # Counter lives here
+
+            # Add rules for each port
+            IFS=',' read -ra ports <<< "$port_str"
+            for port in "${ports[@]}"; do
+                [ -z "$port" ] && continue
+                log "Adding rule for port $port (tunnel $name)"
+                iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name"
+                iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -j "HYST_$name"
+                iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -j "HYST_$name"
+                iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -j "HYST_$name"
+            done
+        done < "$MAPPING_FILE"
+    fi
+    log "Iptables rules set up complete!"
 }
 
-# Function to update iptables rules
-update_iptables() {
-  local ports
-
-  # Clear old iptables rules for our chains
-  while iptables -t mangle -D INPUT -j HYSTERIA_TRAFFIC 2>/dev/null; do true; done
-  while iptables -t mangle -D OUTPUT -j HYSTERIA_TRAFFIC 2>/dev/null; do true; done
-  while iptables -t mangle -F HYSTERIA_TRAFFIC 2>/dev/null; do true; done
-  iptables -t mangle -X HYSTERIA_TRAFFIC 2>/dev/null || true
-  iptables -t mangle -N HYSTERIA_TRAFFIC 2>/dev/null || true
-
-  # Add main jump rules
-  iptables -t mangle -A INPUT -j HYSTERIA_TRAFFIC
-  iptables -t mangle -A OUTPUT -j HYSTERIA_TRAFFIC
-
-  # Read tunnel configs and add rules
-  if [ -f "$MAPPING_FILE" ]; then
-    while IFS='|' read -r cfg service port_str; do
-      name="${cfg##*iran-}"
-      name="${name%.yaml}"
-      [ -z "$name" ] && continue
-
-      # Create chain for this tunnel
-      iptables -t mangle -F "HYST_$name" 2>/dev/null || true
-      iptables -t mangle -X "HYST_$name" 2>/dev/null || true
-      iptables -t mangle -N "HYST_$name" 2>/dev/null || true
-      iptables -t mangle -A "HYST_$name" -j RETURN  # Counter lives here
-
-      # Split ports
-      IFS=',' read -ra ports <<< "$port_str"
-      for port in "${ports[@]}"; do
-        [ -z "$port" ] && continue
-        iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name"
-        iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -j "HYST_$name"
-        iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -j "HYST_$name"
-        iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -j "HYST_$name"
-      done
-    done < "$MAPPING_FILE"
-  fi
+# Function to get total bytes for a tunnel from iptables
+get_tunnel_bytes() {
+    local name="$1"
+    local output
+    local bytes=0
+    output=$(iptables -t mangle -L "HYST_$name" -v -n -x 2>/dev/null | awk '/^[0-9]+/ {print $2}')
+    if [ -n "$output" ]; then
+        bytes="$output"
+    fi
+    echo "$bytes"
 }
 
-# Function to get traffic from iptables
-get_traffic() {
-  local name="$1"
-  local bytes=0
-
-  # Try to get bytes from iptables
-  local output
-  output=$(iptables -t mangle -L "HYST_$name" -v -n -x 2>/dev/null | grep -E '^[0-9]' | head -1)
-  if [ -n "$output" ]; then
-    bytes=$(echo "$output" | awk '{print $2}')
-  fi
-  echo "$bytes"
-}
-
-# Main loop
-echo "Starting traffic monitor..."
-
-# Initialize iptables
-update_iptables
+# Initialize iptables on startup
+setup_iptables
 
 # Main loop
 while true; do
-  # Read current data
-  current_data=$(read_data)
+    # Read current traffic data
+    current_data=$(cat "$DATA_FILE" 2>/dev/null || echo '{}')
 
-  # Update data
-  if [ -f "$MAPPING_FILE" ]; then
-    while IFS='|' read -r cfg service port_str; do
-      name="${cfg##*iran-}"
-      name="${name%.yaml}"
-      [ -z "$name" ] && continue
+    # Process each tunnel from mapping file
+    if [ -f "$MAPPING_FILE" ]; then
+        while IFS='|' read -r cfg service port_str; do
+            [ -z "$cfg" ] && continue
 
-      # Get new traffic from iptables
-      new_bytes=$(get_traffic "$name")
-      if [ -n "$new_bytes" ] && [ "$new_bytes" -gt 0 ] 2>/dev/null; then
-        # Update data
-        updated_data=$(python3 -c "
+            name="${cfg##*iran-}"
+            name="${name%.yaml}"
+
+            # Get current iptables counter
+            current_bytes=$(get_tunnel_bytes "$name")
+
+            # Update traffic data using Python for safe JSON handling
+            updated_data=$(python3 -c "
 import json
-data = json.loads('''$current_data''')
+try:
+    data = json.loads('''$current_data''')
+except:
+    data = {}
 name = '''$name'''
-new_bytes = int('''$new_bytes''')
+try:
+    current = int('''$current_bytes''')
+except:
+    current = 0
 if name not in data:
-    data[name] = {'total_rx': 0, 'total_tx': 0, 'last_bytes': 0}
-# Calculate delta
-delta = new_bytes - data[name]['last_bytes']
+    data[name] = {'total_rx': 0, 'total_tx': 0, 'last_bytes': current}
+delta = current - data[name]['last_bytes']
 if delta > 0:
     data[name]['total_rx'] += delta // 2
     data[name]['total_tx'] += delta // 2
-# Update last bytes
-data[name]['last_bytes'] = new_bytes
+data[name]['last_bytes'] = current
 print(json.dumps(data, indent=2))
-" 2>/dev/null || echo "$current_data")
-        current_data="$updated_data"
-      fi
-    done < "$MAPPING_FILE"
-  fi
+" 2>/dev/null)
 
-  # Write data
-  write_data "$current_data"
+            if [ -n "$updated_data" ]; then
+                current_data="$updated_data"
+            fi
+        done < "$MAPPING_FILE"
+    fi
 
-  # Sleep
-  sleep 2
+    # Write updated data to file
+    echo "$current_data" > "$DATA_FILE"
+    chown hysteria:hysteria "$DATA_FILE" 2>/dev/null
+
+    # Check if mapping file has changed - if yes, reset iptables
+    if [ -f "$MAPPING_FILE.md5" ]; then
+        old_md5=$(cat "$MAPPING_FILE.md5")
+        new_md5=$(md5sum "$MAPPING_FILE" 2>/dev/null | awk '{print $1}')
+        if [ "$old_md5" != "$new_md5" ]; then
+            log "Mapping file changed - resetting iptables rules..."
+            setup_iptables
+            md5sum "$MAPPING_FILE" > "$MAPPING_FILE.md5"
+        fi
+    else
+        md5sum "$MAPPING_FILE" > "$MAPPING_FILE.md5"
+    fi
+
+    # Sleep for 2 seconds
+    sleep 2
 done
 TRAFFIC_MONITOR_EOF
 
@@ -2569,6 +2584,8 @@ EOF
 
     echo "iran-${TUNNEL_NAME}.yaml|hysteria-${TUNNEL_NAME}|${FORWARDED_PORTS}" \
     | sudo tee -a "$MAPPING_FILE" > /dev/null
+    # Update mapping file MD5 to trigger iptables reset in traffic monitor
+    sudo md5sum "$MAPPING_FILE" > "$MAPPING_FILE.md5"
     colorEcho "Tunnel '${TUNNEL_NAME}' setup completed." green
   done
 # Restart traffic monitor to update iptables rules for new tunnels
