@@ -2509,11 +2509,15 @@ while IFS='|' read -r cfg service ports; do
   name="${name%.yaml}"
   chain="HYST${name}"
   sudo iptables -t mangle -N "$chain" 2>/dev/null || sudo iptables -t mangle -F "$chain"
-  sudo iptables -t mangle -A "$chain" -j RETURN
+  # Add a rule to count all traffic in this chain (use -j ACCEPT or just -j RETURN, but the counter is on the rule)
+  sudo iptables -t mangle -A "$chain" -j RETURN  # This rule will have the byte counter
   IFS=',' read -ra PARR <<< "$ports"
   for p in "${PARR[@]}"; do
-    sudo iptables -t mangle -A OUTPUT -p tcp --dport "$p" -j "$chain"
-    sudo iptables -t mangle -A OUTPUT -p udp --dport "$p" -j "$chain"
+    # Also add INPUT chain rules for incoming traffic to the local ports
+    sudo iptables -t mangle -A INPUT -p tcp --dport "$p" -j "$chain"
+    sudo iptables -t mangle -A INPUT -p udp --dport "$p" -j "$chain"
+    sudo iptables -t mangle -A OUTPUT -p tcp --sport "$p" -j "$chain"
+    sudo iptables -t mangle -A OUTPUT -p udp --sport "$p" -j "$chain"
   done
 done < "$MAPPING_FILE"
 
