@@ -853,7 +853,7 @@ HTML_TEMPLATE_MAIN = """
           <a href="{{ url_for('reset_traffic', name=tunnel.name) }}" class="btn" style="background:linear-gradient(135deg, #8b5cf6, #7c3aed);color:white;">🔢 ریست ترافیک</a>
         </div>
         {% endif %}
-        {% if tunnel.show_logs %}
+        {% if is_admin and tunnel.show_logs %}
         <div class="logs-section">{{ tunnel.logs }}</div>
         {% endif %}
       </div>
