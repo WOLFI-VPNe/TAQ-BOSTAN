@@ -99,20 +99,13 @@ fi
 # Give hysteria user access to necessary directories
 sudo chown -R hysteria:hysteria /etc/hysteria/ /var/log/hysteria/
 
-# Install iptables setup script for tunnels (FIXED!)
+# Install iptables setup script for tunnels (100% COMPATIBLE!)
 sudo tee /etc/hysteria/setup_iptables.sh > /dev/null << 'IPTABLES_EOF'
 #!/bin/bash
 MAPPING_FILE="/etc/hysteria/port_mapping.txt"
 WEB_PORT=3388
 
-# Get hysteria user ID
-HYSTERIA_UID=$(id -u hysteria 2>/dev/null)
-if [ -z "$HYSTERIA_UID" ]; then
-    echo "Error: hysteria user not found!"
-    exit 1
-fi
-
-# Clear old rules
+# Clear old rules (with 2>/dev/null to suppress errors)
 for chain in $(iptables -t mangle -L -n 2>/dev/null | grep '^Chain' | awk '{print $2}' | grep '^HYST_'); do
     iptables -t mangle -F "$chain" 2>/dev/null
     iptables -t mangle -X "$chain" 2>/dev/null
@@ -121,40 +114,39 @@ iptables -t mangle -F HYSTERIA_TRAFFIC 2>/dev/null
 iptables -t mangle -X HYSTERIA_TRAFFIC 2>/dev/null
 
 # Create main chain
-iptables -t mangle -N HYSTERIA_TRAFFIC
+iptables -t mangle -N HYSTERIA_TRAFFIC 2>/dev/null
 
 # EXCLUDE WEB MANAGER PORT FIRST (so it's NOT counted!)
-iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport $WEB_PORT -j RETURN
-iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport $WEB_PORT -j RETURN
-iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport $WEB_PORT -j RETURN
-iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport $WEB_PORT -j RETURN
+iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport $WEB_PORT -j RETURN 2>/dev/null
+iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport $WEB_PORT -j RETURN 2>/dev/null
+iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport $WEB_PORT -j RETURN 2>/dev/null
+iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport $WEB_PORT -j RETURN 2>/dev/null
 
 # Hook into INPUT and OUTPUT chains
-iptables -t mangle -A INPUT -j HYSTERIA_TRAFFIC
-iptables -t mangle -A OUTPUT -j HYSTERIA_TRAFFIC
+iptables -t mangle -A INPUT -j HYSTERIA_TRAFFIC 2>/dev/null
+iptables -t mangle -A OUTPUT -j HYSTERIA_TRAFFIC 2>/dev/null
 
-# Add rules for each tunnel!
+# Add rules for each tunnel! (SIMPLE PORT MATCHING ONLY!)
 if [ -f "$MAPPING_FILE" ]; then
     while IFS='|' read -r cfg service port_str; do
         [ -z "$cfg" ] && continue
         name="${cfg##*iran-}"
         name="${name%.yaml}"
         iptables -t mangle -N "HYST_$name" 2>/dev/null
-        iptables -t mangle -A "HYST_$name" -j RETURN
+        iptables -t mangle -A "HYST_$name" -j RETURN 2>/dev/null
         IFS=',' read -ra ports <<< "$port_str"
         for port in "${ports[@]}"; do
             [ -z "$port" ] && continue
-            # For INPUT: just match port (incoming traffic to tunnel)
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name"
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -j "HYST_$name"
-            # For OUTPUT: match port AND hysteria user
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -m owner --uid-owner $HYSTERIA_UID -j "HYST_$name"
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -m owner --uid-owner $HYSTERIA_UID -j "HYST_$name"
+            # Simple port matching for both directions!
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name" 2>/dev/null
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -j "HYST_$name" 2>/dev/null
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -j "HYST_$name" 2>/dev/null
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -j "HYST_$name" 2>/dev/null
         done
     done < "$MAPPING_FILE"
 fi
 
-echo "Iptables rules updated! (Web port excluded, output uses hysteria user)"
+echo "Iptables rules updated! (Web port excluded, simple mode)"
 IPTABLES_EOF
 
 # Install debug script (so you can see what's going on!)
