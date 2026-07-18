@@ -1085,7 +1085,7 @@ def format_bytes(bytes_val):
 
 def get_traffic_usage(name):
   try:
-    # DIRECTLY read iptables counter for this tunnel (SIMPLE!)
+    # ULTRA SIMPLE: Use iptables -L -v -n -x and parse directly
     chain_name = f"HYST_{name}"
     result = subprocess.run(
       ["iptables", "-t", "mangle", "-L", chain_name, "-v", "-n", "-x"],
@@ -1093,14 +1093,21 @@ def get_traffic_usage(name):
       text=True
     )
     if result.returncode == 0:
-      lines = result.stdout.strip().splitlines()
-      # The first data line (after headers) has the counter
-      for line in lines[2:]:
-        parts = line.strip().split()
-        if len(parts) >= 2 and parts[0].isdigit():
-          total_bytes = int(parts[1])
-          return format_bytes(total_bytes)
-  except Exception as e:
+      # Split output into lines
+      output_lines = result.stdout.splitlines()
+      # Find first line that starts with a number (the counter line)
+      for line in output_lines:
+        stripped = line.strip()
+        if stripped and stripped[0].isdigit():
+          # Split into parts, second part is bytes
+          parts = stripped.split()
+          if len(parts) >= 2:
+            try:
+              total_bytes = int(parts[1])
+              return format_bytes(total_bytes)
+            except:
+              pass
+  except Exception:
     pass
   return "0 B"
 
@@ -1467,17 +1474,12 @@ def reset_traffic(name):
     return redirect(url_for('index'))
 
   try:
-    data_file = "/etc/hysteria/traffic_data.json"
-    import json
-    # Read current data
-    with open(data_file, "r") as f:
-      data = json.load(f)
-    # Reset traffic for this tunnel
-    if name in data:
-      del data[name]
-    # Write back
-    with open(data_file, "w") as f:
-      json.dump(data, f, indent=2)
+    # ACTUALLY reset the iptables counter for this tunnel!
+    chain_name = f"HYST_{name}"
+    # Step 1: Flush the chain (resets all counters)
+    subprocess.run(["iptables", "-t", "mangle", "-F", chain_name], capture_output=True)
+    # Step 2: Re-add the RETURN rule (so counter starts fresh)
+    subprocess.run(["iptables", "-t", "mangle", "-A", chain_name, "-j", "RETURN"], capture_output=True)
   except Exception:
     pass
   return redirect(url_for('index'))
