@@ -587,109 +587,97 @@ HTML_TEMPLATE_LOGIN = """
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ورود - مدیریت Hysteria</title>
+  <title>ورود | مدیریت Hysteria</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { font-family: 'Vazirmatn', sans-serif; }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      background: radial-gradient(circle at top left, #1e1b4b 0, #020617 50%, #000000 100%);
       min-height: 100vh;
-      padding: 40px 20px;
-      color: #e5e7eb;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      overflow-x: hidden;
     }
-    .login-card {
-      background: rgba(31, 41, 55, 0.95);
-      border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(102, 126, 234, 0.2);
-      width: 100%;
-      max-width: 400px;
+    .glass-card {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.8), 0 0 0 1px rgba(15, 23, 42, 0.5);
     }
-    h1 {
-      text-align: center;
-      color: #ffffff;
-      margin-bottom: 30px;
-      text-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
-      font-size: 1.8rem;
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 600;
-      font-size: 14px;
-    }
-    input {
-      width: 100%;
-      padding: 12px 16px;
-      border-radius: 10px;
-      border: 1px solid rgba(102, 126, 234, 0.3);
-      background: rgba(17, 24, 39, 0.8);
-      color: white;
-      font-size: 16px;
-    }
-    input:focus {
-      outline: none;
-      border-color: rgba(102, 126, 234, 0.8);
-      box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
-    }
-    .btn {
-      width: 100%;
-      padding: 14px;
-      border: none;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.3s;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-    }
-    .btn:hover {
+    .btn-primary:hover {
+      box-shadow: 0 0 40px rgba(99, 102, 241, 0.4);
       transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
     }
-    .error {
-      color: #ef4444;
-      text-align: center;
-      margin-bottom: 20px;
-      font-weight: 600;
+    .input-field {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.8);
+      transition: all 0.3s;
+    }
+    .input-field:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #818cf8 0%, #e879f9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .pulse-dot {
+      width: 8px; height: 8px; background: #22c55e; border-radius: 9999px;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
     }
   </style>
 </head>
-<body>
-  <div class="login-card">
-    <h1>🔐 ورود به مدیریت</h1>
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
-    <form method="post" action="{{ url_for('login') }}">
-      <div class="form-group">
-        <label for="username">نام کاربری</label>
-        <input type="text" id="username" name="username" required autofocus>
+<body class="flex items-center justify-center p-4">
+  <div class="w-full max-w-md">
+    <div class="glass-card rounded-3xl p-8 sm:p-10">
+      <div class="text-center mb-8">
+        <div class="flex justify-center mb-4">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+        </div>
+        <h1 class="text-3xl font-bold gradient-text">ورود به مدیریت</h1>
+        <p class="text-slate-400 mt-2 text-sm">مدیریت تونل‌های Hysteria خود را انجام دهید</p>
       </div>
-      <div class="form-group">
-        <label for="password">رمز عبور</label>
-        <input type="password" id="password" name="password" required>
+      {% if error %}
+      <div class="mb-6 p-4 rounded-xl bg-red-900/30 border border-red-500/30 text-red-300 text-sm text-center">
+        {{ error }}
       </div>
-      <button type="submit" class="btn">ورود</button>
-    </form>
-    <p style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
-      نام کاربری پیش‌فرض: admin | رمز عبور: admin123
-    </p>
+      {% endif %}
+      <form method="post" action="{{ url_for('login') }}" class="space-y-5">
+        <div>
+          <label for="username" class="block text-sm font-medium text-slate-300 mb-2">نام کاربری</label>
+          <input type="text" id="username" name="username" required autofocus
+                 class="input-field w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none">
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium text-slate-300 mb-2">رمز عبور</label>
+          <input type="password" id="password" name="password" required
+                 class="input-field w-full px-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none">
+        </div>
+        <button type="submit" class="btn-primary w-full py-3 px-4 rounded-xl text-white font-semibold">
+          ورود
+        </button>
+      </form>
+      <div class="mt-8 pt-6 border-t border-slate-700/50">
+        <p class="text-center text-xs text-slate-500">
+          نام کاربری پیش‌فرض: <span class="text-slate-300">admin</span> | رمز عبور: <span class="text-slate-300">admin123</span>
+        </p>
+      </div>
+    </div>
   </div>
 </body>
 </html>
@@ -701,365 +689,261 @@ HTML_TEMPLATE_MAIN = """
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>مدیریت Hysteria</title>
+  <title>داشبورد | مدیریت Hysteria</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { font-family: 'Vazirmatn', sans-serif; }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      background: radial-gradient(circle at top left, #1e1b4b 0, #020617 50%, #000000 100%);
       min-height: 100vh;
-      padding: 20px;
-      color: #e5e7eb;
+      overflow-x: hidden;
     }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
+    .glass-card {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.8), 0 0 0 1px rgba(15, 23, 42, 0.5);
     }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 30px;
-      padding: 15px 25px;
-      background: rgba(31, 41, 55, 0.95);
-      border-radius: 15px;
-      border: 1px solid rgba(102, 126, 234, 0.2);
+    .glass-tunnel {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    h1 {
-      text-align: center;
-      color: #ffffff;
-      text-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
-      font-size: 2rem;
-    }
-    .user-info {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-    }
-    .user-info span {
-      font-weight: 600;
-    }
-    .btn-small {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.3s;
-      background: linear-gradient(135deg, #ef4444, #dc2626);
-      color: white;
-    }
-    .btn-small:hover {
+    .glass-tunnel:hover {
+      border-color: rgba(99, 102, 241, 0.6);
       transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+      box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.2);
     }
-    .btn-nav {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.3s;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      text-decoration: none;
-      display: inline-block;
+    .status-active {
+      background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
     }
-    .btn-nav:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    .status-inactive {
+      background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
     }
-    .card {
-      background: rgba(31, 41, 55, 0.95);
-      border-radius: 20px;
-      padding: 30px;
-      margin-bottom: 25px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(102, 126, 234, 0.2);
-    }
-    .tunnel {
-      border-left: 5px solid #667eea;
-      margin-bottom: 25px;
-      padding: 25px;
-      background: rgba(55, 65, 81, 0.6);
-      border-radius: 15px;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      position: relative;
-      overflow: hidden;
-    }
-    .tunnel::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
-      transition: left 0.6s;
-    }
-    .tunnel:hover::before {
-      left: 100%;
-    }
-    .tunnel:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 15px 40px rgba(102, 126, 234, 0.3);
-    }
-    .tunnel.active {
-      border-left-color: #10b981;
-      background: rgba(16, 185, 129, 0.15);
-    }
-    .tunnel.inactive {
-      border-left-color: #ef4444;
-      background: rgba(239, 68, 68, 0.15);
-    }
-    .tunnel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-    .tunnel-name {
-      font-size: 28px;
-      font-weight: 900;
-      color: #ffffff;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .status-badge {
-      padding: 8px 20px;
-      border-radius: 25px;
-      font-weight: 800;
-      font-size: 14px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    }
-    .status-badge.active {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: white;
-    }
-    .status-badge.inactive {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
-      color: white;
-    }
-    .tunnel-info {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 18px;
-      margin-bottom: 20px;
-    }
-    .info-item {
-      background: rgba(17, 24, 39, 0.8);
-      padding: 18px;
-      border-radius: 12px;
-      border: 1px solid rgba(102, 126, 234, 0.3);
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
       transition: all 0.3s;
     }
-    .info-item:hover {
-      border-color: rgba(102, 126, 234, 0.8);
-      transform: scale(1.02);
+    .btn-primary:hover {
+      box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
+      transform: translateY(-1px);
     }
-    .info-label {
-      font-size: 13px;
-      color: #9ca3af;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
+    .btn-success {
+      background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
     }
-    .info-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: #ffffff;
+    .btn-danger {
+      background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
     }
-    .ports {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 15px;
+    .btn-warning {
+      background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
     }
-    .port-tag {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      padding: 6px 16px;
-      border-radius: 15px;
-      font-size: 14px;
-      font-weight: 600;
-      box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
-      transition: all 0.3s;
+    .stat-card {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 64, 175, 0.4));
+      border: 1px solid rgba(37, 99, 235, 0.3);
     }
-    .port-tag:hover {
-      transform: scale(1.1);
-      box-shadow: 0 6px 15px rgba(102, 126, 234, 0.6);
-    }
-    .actions {
-      display: flex;
-      gap: 12px;
-      margin-top: 20px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.3s;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-      text-decoration: none;
-      display: inline-block;
-    }
-    .btn-start {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: white;
-    }
-    .btn-stop {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
-      color: white;
-    }
-    .btn-restart {
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: white;
-    }
-    .btn:hover {
-      transform: translateY(-3px) scale(1.05);
-      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-    }
-    .logs-section {
-      background: rgba(0, 0, 0, 0.7);
-      color: #10b981;
-      padding: 25px;
-      border-radius: 12px;
-      margin-top: 20px;
-      font-family: 'Courier New', Courier, monospace;
-      max-height: 350px;
-      overflow-y: auto;
-      text-align: left;
-      direction: ltr;
-      border: 1px solid rgba(102, 126, 234, 0.3);
-    }
-    .refresh-toggle {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 25px;
-      gap: 10px;
-      align-items: center;
-    }
-    .refresh-toggle label {
-      font-size: 16px;
-      font-weight: 600;
-    }
-    .refresh-toggle select {
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid rgba(102, 126, 234, 0.5);
-      background: rgba(31, 41, 55, 0.9);
-      color: white;
-      font-weight: 600;
+    .port-chip {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+      border: 1px solid rgba(99, 102, 241, 0.4);
     }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>🎯 مدیریت Hysteria</h1>
-      <div class="user-info">
-        <span>{{ username }}</span>
-        {% if is_admin %}
-        <a href="{{ url_for('admin_panel') }}" class="btn-nav">👥 مدیریت کاربران</a>
-        {% endif %}
-        <a href="{{ url_for('logout') }}" class="btn-small">🚪 خروج</a>
-      </div>
-    </div>
+<body class="text-slate-100">
+  <div class="min-h-screen p-4 sm:p-6 lg:p-8">
+    <div class="max-w-7xl mx-auto">
+      <!-- Header -->
+      <header class="glass-card rounded-3xl p-4 sm:p-6 mb-8">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
+                مدیریت Hysteria
+              </h1>
+              <p class="text-slate-400 text-sm mt-1">خوش آمدید, {{ username }}!</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            {% if is_admin %}
+            <a href="{{ url_for('admin_panel') }}" class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              مدیریت کاربران
+            </a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800/70 border border-slate-700 hover:bg-slate-700 transition">
+              خروج
+            </a>
+          </div>
+        </div>
+      </header>
 
-    <div style="text-align: center; margin-bottom: 20px;">
-      <button id="speedtest-btn" class="btn" style="background: linear-gradient(135deg, #10b981, #059669);">
-        🚀 تست سرعت
-      </button>
-      <div id="speedtest-result" style="margin-top: 10px; color: #e5e7eb;"></div>
-    </div>
+      <!-- Top Controls -->
+      <div class="flex flex-col lg:flex-row gap-4 mb-8">
+        <!-- Speed Test Button -->
+        <div class="glass-card rounded-2xl p-4 flex-1">
+          <h3 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            تست سرعت
+          </h3>
+          <div class="flex flex-col gap-3">
+            <button id="speedtest-btn" class="btn-primary w-full py-3 px-4 rounded-xl text-white font-semibold">
+              🚀 شروع تست سرعت
+            </button>
+            <div id="speedtest-result" class="text-sm text-slate-300 bg-slate-900/50 p-3 rounded-xl border border-slate-700 min-h-[40px]"></div>
+          </div>
+        </div>
+        
+        <!-- Auto Refresh -->
+        <div class="glass-card rounded-2xl p-4 flex-1">
+          <h3 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            به‌روزرسانی خودکار
+          </h3>
+          <div class="flex items-center gap-3">
+            <select id="refresh-interval" onchange="updateRefreshInterval()"
+                    class="flex-1 bg-slate-900/70 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="5">5 ثانیه</option>
+              <option value="10" selected>10 ثانیه</option>
+              <option value="30">30 ثانیه</option>
+              <option value="60">1 دقیقه</option>
+              <option value="0">خاموش</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-    <div class="refresh-toggle">
-      <label for="refresh-interval">فاصله زمانی به‌روزرسانی:</label>
-      <select id="refresh-interval" onchange="updateRefreshInterval()">
-        <option value="5">5 ثانیه</option>
-        <option value="10" selected>10 ثانیه</option>
-        <option value="30">30 ثانیه</option>
-        <option value="60">1 دقیقه</option>
-        <option value="0">خاموش</option>
-      </select>
-    </div>
+      <!-- Tunnels List -->
+      <div class="glass-card rounded-3xl p-6 sm:p-8">
+        <h2 class="text-xl sm:text-2xl font-bold mb-6 flex items-center gap-3">
+          <span class="inline-block w-1 h-8 rounded-full bg-gradient-to-b from-indigo-500 to-purple-500"></span>
+          لیست تونل‌ها
+        </h2>
 
-    <div class="card">
-      <h2 style="margin-bottom:20px;color:#e5e7eb;">لیست تانل‌ها</h2>
-      {% for tunnel in tunnels %}
-      <div class="tunnel {{ tunnel.status }}">
-        <div class="tunnel-header">
-          <span class="tunnel-name">{{ tunnel.name }}</span>
-          <span class="status-badge {{ tunnel.status }}">{{ tunnel.status_text }}</span>
+        {% if tunnels %}
+        <div class="grid gap-4">
+          {% for tunnel in tunnels %}
+          <div class="glass-tunnel rounded-2xl p-5 sm:p-6">
+            <!-- Tunnel Header -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center border border-slate-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="text-xl font-bold text-white">{{ tunnel.name }}</h3>
+                  <p class="text-slate-400 text-sm">{{ tunnel.server }}</p>
+                </div>
+              </div>
+              <span class="px-4 py-1.5 rounded-full text-xs font-bold text-white {{ 'status-active' if tunnel.status == 'active' else 'status-inactive' }}">
+                {{ tunnel.status_text }}
+              </span>
+            </div>
+
+            <!-- Tunnel Info -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+              <div class="stat-card rounded-xl p-4">
+                <p class="text-slate-400 text-xs mb-1">SNI</p>
+                <p class="text-lg font-semibold text-white">{{ tunnel.sni }}</p>
+              </div>
+              <div class="stat-card rounded-xl p-4">
+                <p class="text-slate-400 text-xs mb-1">ترافیک مصرفی</p>
+                <p class="text-lg font-semibold text-white">{{ tunnel.traffic }}</p>
+              </div>
+              <div class="stat-card rounded-xl p-4">
+                <p class="text-slate-400 text-xs mb-1">وضعیت سرویس</p>
+                <p class="text-lg font-semibold {{ 'text-emerald-400' if tunnel.status == 'active' else 'text-red-400' }}">
+                  {{ tunnel.status_text }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Ports -->
+            {% if tunnel.tcp_ports or tunnel.udp_ports %}
+            <div class="mb-5">
+              {% if tunnel.tcp_ports %}
+              <div class="mb-3">
+                <p class="text-slate-400 text-xs mb-2">پورت‌های TCP</p>
+                <div class="flex flex-wrap gap-2">
+                  {% for port in tunnel.tcp_ports %}
+                  <span class="port-chip px-3 py-1.5 rounded-lg text-sm text-indigo-200 font-medium">
+                    {{ port }}
+                  </span>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% if tunnel.udp_ports %}
+              <div>
+                <p class="text-slate-400 text-xs mb-2">پورت‌های UDP</p>
+                <div class="flex flex-wrap gap-2">
+                  {% for port in tunnel.udp_ports %}
+                  <span class="port-chip px-3 py-1.5 rounded-lg text-sm text-purple-200 font-medium">
+                    {{ port }}
+                  </span>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Actions -->
+            {% if is_admin %}
+            <div class="flex flex-wrap gap-2 pt-4 border-t border-slate-700/50">
+              {% if tunnel.status == 'inactive' %}
+              <a href="{{ url_for('start_tunnel', name=tunnel.name) }}" class="btn-success px-4 py-2 rounded-xl text-sm font-semibold text-white">
+                ▶️ شروع
+              </a>
+              {% else %}
+              <a href="{{ url_for('stop_tunnel', name=tunnel.name) }}" class="btn-danger px-4 py-2 rounded-xl text-sm font-semibold text-white">
+                ⏹️ توقف
+              </a>
+              {% endif %}
+              <a href="{{ url_for('restart_tunnel', name=tunnel.name) }}" class="btn-warning px-4 py-2 rounded-xl text-sm font-semibold text-white">
+                🔄 ری‌استارت
+              </a>
+              <a href="{{ url_for('view_logs', name=tunnel.name) }}" class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold text-white">
+                📋 لاگ‌ها
+              </a>
+              <a href="{{ url_for('reset_traffic', name=tunnel.name) }}" class="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-slate-700/70 border border-slate-600 hover:bg-slate-700 transition">
+                🔢 ریست ترافیک
+              </a>
+            </div>
+            {% endif %}
+
+            <!-- Logs -->
+            {% if is_admin and tunnel.show_logs %}
+            <div class="mt-5 bg-slate-950/80 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+              <pre class="text-xs sm:text-sm text-emerald-300 whitespace-pre-wrap direction-ltr">{{ tunnel.logs }}</pre>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
         </div>
-        <div class="tunnel-info">
-          <div class="info-item">
-            <div class="info-label">سرور</div>
-            <div class="info-value">{{ tunnel.server }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">SNI</div>
-            <div class="info-value">{{ tunnel.sni }}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">ترافیک مصرفی</div>
-            <div class="info-value">{{ tunnel.traffic }}</div>
-          </div>
-        </div>
-        <div>
-          <div class="info-label" style="margin-bottom:5px;">پورت‌های TCP</div>
-          <div class="ports">
-            {% for port in tunnel.tcp_ports %}
-            <span class="port-tag">{{ port }}</span>
-            {% endfor %}
-          </div>
-        </div>
-        <div style="margin-top:10px;">
-          <div class="info-label" style="margin-bottom:5px;">پورت‌های UDP</div>
-          <div class="ports">
-            {% for port in tunnel.udp_ports %}
-            <span class="port-tag">{{ port }}</span>
-            {% endfor %}
-          </div>
-        </div>
-        {% if is_admin %}
-        <div class="actions">
-          {% if tunnel.status == 'inactive' %}
-          <a href="{{ url_for('start_tunnel', name=tunnel.name) }}" class="btn btn-start">▶️ شروع</a>
-          {% else %}
-          <a href="{{ url_for('stop_tunnel', name=tunnel.name) }}" class="btn btn-stop">⏹️ توقف</a>
-          {% endif %}
-          <a href="{{ url_for('restart_tunnel', name=tunnel.name) }}" class="btn btn-restart">🔄 ری‌استارت</a>
-          <a href="{{ url_for('view_logs', name=tunnel.name) }}" class="btn" style="background:linear-gradient(135deg, #667eea, #764ba2);color:white;">📋 لاگ‌ها</a>
-          <a href="{{ url_for('reset_traffic', name=tunnel.name) }}" class="btn" style="background:linear-gradient(135deg, #8b5cf6, #7c3aed);color:white;">🔢 ریست ترافیک</a>
+        {% else %}
+        <div class="text-center py-12">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+          </svg>
+          <p class="text-slate-500 text-lg">هیچ تونلی یافت نشد!</p>
         </div>
         {% endif %}
-        {% if is_admin and tunnel.show_logs %}
-        <div class="logs-section">{{ tunnel.logs }}</div>
-        {% endif %}
       </div>
-      {% endfor %}
-      {% if not tunnels %}
-      <div style="text-align:center;color:#9ca3af;margin-top:30px;">
-        <p>هیچ تانلی یافت نشد!</p>
-      </div>
-      {% endif %}
     </div>
   </div>
 
@@ -1098,13 +982,14 @@ HTML_TEMPLATE_MAIN = """
         resultDiv.textContent = 'خطا در تست سرعت: ' + error.message;
       } finally {
         btn.disabled = false;
-        btn.textContent = '🚀 تست سرعت';
+        btn.textContent = '🚀 شروع تست سرعت';
       }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
       updateRefreshInterval();
-      document.getElementById('speedtest-btn').addEventListener('click', runSpeedTest);
+      const speedBtn = document.getElementById('speedtest-btn');
+      if (speedBtn) speedBtn.addEventListener('click', runSpeedTest);
     });
   </script>
 </body>
@@ -1117,221 +1002,235 @@ HTML_TEMPLATE_ADMIN = """
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>مدیریت کاربران - Hysteria</title>
+  <title>مدیریت کاربران | Hysteria</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; font-family: 'Vazirmatn', sans-serif; }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      background: radial-gradient(circle at top left, #1e1b4b 0, #020617 50%, #000000 100%);
       min-height: 100vh;
-      padding: 20px;
       color: #e5e7eb;
     }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
+    .glass-card {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.8), 0 0 0 1px rgba(15, 23, 42, 0.5);
     }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 30px;
-      padding: 15px 25px;
-      background: rgba(31, 41, 55, 0.95);
-      border-radius: 15px;
-      border: 1px solid rgba(102, 126, 234, 0.2);
-    }
-    h1, h2 {
-      color: #ffffff;
-      text-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
-    }
-    .btn-back {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
+    .field-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.8);
       transition: all 0.3s;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      text-decoration: none;
-      display: inline-block;
     }
-    .btn-back:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
-    }
-    .card {
-      background: rgba(31, 41, 55, 0.95);
-      border-radius: 20px;
-      padding: 30px;
-      margin-bottom: 25px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(102, 126, 234, 0.2);
-    }
-    .form-group {
-      margin-bottom: 15px;
+    .field-card:hover {
+      border-color: rgba(99, 102, 241, 0.35);
     }
     label {
       display: block;
       margin-bottom: 8px;
       font-weight: 600;
+      color: #cbd5e1;
     }
     input, select {
       width: 100%;
-      padding: 10px 15px;
-      border-radius: 10px;
-      border: 1px solid rgba(102, 126, 234, 0.3);
-      background: rgba(17, 24, 39, 0.8);
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(51, 65, 85, 0.85);
+      background: rgba(2, 6, 23, 0.75);
       color: white;
       font-size: 15px;
     }
     input:focus, select:focus {
       outline: none;
-      border-color: rgba(102, 126, 234, 0.8);
+      border-color: rgba(99, 102, 241, 0.9);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
     }
     .btn {
-      padding: 12px 24px;
+      padding: 12px 18px;
       border: none;
-      border-radius: 10px;
+      border-radius: 14px;
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
       transition: all 0.3s;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      background: linear-gradient(135deg, #10b981, #059669);
+      background: linear-gradient(135deg, #6366f1, #a855f7);
       color: white;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
     .btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5);
+      transform: translateY(-1px);
+      box-shadow: 0 0 30px rgba(99, 102, 241, 0.35);
     }
     .btn-danger {
       background: linear-gradient(135deg, #ef4444, #dc2626);
     }
     .btn-danger:hover {
-      box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5);
+      box-shadow: 0 0 30px rgba(239, 68, 68, 0.35);
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 25px;
     }
     th, td {
-      padding: 14px 15px;
+      padding: 16px 14px;
       text-align: right;
-      border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+      border-bottom: 1px solid rgba(51, 65, 85, 0.7);
+      vertical-align: top;
     }
     th {
-      background: rgba(17, 24, 39, 0.9);
+      background: rgba(15, 23, 42, 0.9);
       font-weight: 700;
+      color: #cbd5e1;
     }
     .tunnel-checkboxes {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
       margin-top: 10px;
     }
     .checkbox-item {
-      background: rgba(17, 24, 39, 0.8);
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid rgba(102, 126, 234, 0.2);
+      background: rgba(15, 23, 42, 0.72);
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(51, 65, 85, 0.8);
+      color: #e2e8f0;
+    }
+    .role-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 9999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .role-admin {
+      background: rgba(168, 85, 247, 0.2);
+      color: #e9d5ff;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+    .role-user {
+      background: rgba(59, 130, 246, 0.18);
+      color: #bfdbfe;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+    }
+    .section-title {
+      color: #fff;
+      font-size: 1.35rem;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+    .table-wrap {
+      overflow-x: auto;
     }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>👥 مدیریت کاربران</h1>
-      <a href="{{ url_for('index') }}" class="btn-back">← بازگشت</a>
-    </div>
-
-    <div class="card">
-      <h2>ایجاد کاربر جدید</h2>
-      <form method="post" action="{{ url_for('create_user') }}">
-        <div class="form-group">
-          <label for="new_username">نام کاربری</label>
-          <input type="text" id="new_username" name="username" required>
-        </div>
-        <div class="form-group">
-          <label for="new_password">رمز عبور</label>
-          <input type="password" id="new_password" name="password" required>
-        </div>
-        <div class="form-group">
-          <label for="is_admin">ادمین است؟</label>
-          <select id="is_admin" name="is_admin">
-            <option value="0">خیر</option>
-            <option value="1">بله</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>تخصیص تانل‌ها (در صورت نیاز):</label>
-          <div class="tunnel-checkboxes">
-            {% for tunnel in all_tunnels %}
-            <label class="checkbox-item">
-              <input type="checkbox" name="tunnels" value="{{ tunnel }}">
-              {{ tunnel }}
-            </label>
-            {% endfor %}
+<body class="text-slate-100">
+  <div class="min-h-screen p-4 sm:p-6 lg:p-8">
+    <div class="max-w-7xl mx-auto">
+      <header class="glass-card rounded-3xl p-5 sm:p-6 mb-8">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">مدیریت کاربران</h1>
+            <p class="text-slate-400 text-sm mt-2">ایجاد، ویرایش و تخصیص تونل برای کاربران پنل وب</p>
           </div>
+          <a href="{{ url_for('index') }}" class="btn">بازگشت به داشبورد</a>
         </div>
-        <button type="submit" class="btn">✨ ایجاد کاربر</button>
-      </form>
-    </div>
+      </header>
 
-    <div class="card">
-      <h2>لیست کاربران</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>نام کاربری</th>
-            <th>نقش</th>
-            <th>تانل‌های تخصیص‌یافته</th>
-            <th>عملیات</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for user in users %}
-          <tr>
-            <td>{{ user.username }}</td>
-            <td>{{ 'ادمین' if user.is_admin else 'کاربر' }}</td>
-            <td>{{ ', '.join(user.tunnels) if user.tunnels else 'هیچ‌کدام' }}</td>
-            <td>
-              <form method="post" action="{{ url_for('edit_user', user_id=user.id) }}" style="display:inline-block;">
-                <input type="password" name="new_password" placeholder="رمز جدید (اختیاری)" style="width:auto;padding:5px;border-radius:5px;margin-right:5px;">
-                <select name="is_admin" style="width:auto;padding:5px;border-radius:5px;margin-right:5px;">
-                  <option value="0" {% if not user.is_admin %}selected{% endif %}>کاربر</option>
-                  <option value="1" {% if user.is_admin %}selected{% endif %}>ادمین</option>
-                </select>
-                <div style="margin-top:5px;">
-                  <label>تخصیص تانل‌ها:</label>
-                  <div class="tunnel-checkboxes">
-                    {% for tunnel in all_tunnels %}
-                    <label class="checkbox-item">
-                      <input type="checkbox" name="tunnels" value="{{ tunnel }}" {% if tunnel in user.tunnels %}checked{% endif %}>
-                      {{ tunnel }}
-                    </label>
-                    {% endfor %}
-                  </div>
-                </div>
-                <button type="submit" class="btn" style="padding:5px 10px;font-size:12px;margin-top:5px;">ویرایش</button>
-              </form>
-              <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" style="display:inline-block;">
-                <button type="submit" class="btn btn-danger" style="padding:5px 10px;font-size:12px;">حذف</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <section class="glass-card rounded-3xl p-6 xl:col-span-1">
+          <h2 class="section-title">ایجاد کاربر جدید</h2>
+          <form method="post" action="{{ url_for('create_user') }}" class="space-y-4">
+            <div class="field-card rounded-2xl p-4">
+              <label for="new_username">نام کاربری</label>
+              <input type="text" id="new_username" name="username" required>
+            </div>
+            <div class="field-card rounded-2xl p-4">
+              <label for="new_password">رمز عبور</label>
+              <input type="password" id="new_password" name="password" required>
+            </div>
+            <div class="field-card rounded-2xl p-4">
+              <label for="is_admin">سطح دسترسی</label>
+              <select id="is_admin" name="is_admin">
+                <option value="0">کاربر عادی</option>
+                <option value="1">ادمین</option>
+              </select>
+            </div>
+            <div class="field-card rounded-2xl p-4">
+              <label>تخصیص تانل‌ها</label>
+              <div class="tunnel-checkboxes">
+                {% for tunnel in all_tunnels %}
+                <label class="checkbox-item">
+                  <input type="checkbox" name="tunnels" value="{{ tunnel }}">
+                  {{ tunnel }}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <button type="submit" class="btn w-full">ایجاد کاربر</button>
+          </form>
+        </section>
+
+        <section class="glass-card rounded-3xl p-6 xl:col-span-2">
+          <h2 class="section-title">لیست کاربران</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>نام کاربری</th>
+                  <th>نقش</th>
+                  <th>تانل‌های تخصیص‌یافته</th>
+                  <th>عملیات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for user in users %}
+                <tr>
+                  <td class="font-semibold text-white">{{ user.username }}</td>
+                  <td>
+                    <span class="role-badge {{ 'role-admin' if user.is_admin else 'role-user' }}">
+                      {{ 'ادمین' if user.is_admin else 'کاربر' }}
+                    </span>
+                  </td>
+                  <td class="text-slate-300">{{ ', '.join(user.tunnels) if user.tunnels else 'هیچ‌کدام' }}</td>
+                  <td>
+                    <form method="post" action="{{ url_for('edit_user', user_id=user.id) }}" class="space-y-3">
+                      <input type="password" name="new_password" placeholder="رمز جدید (اختیاری)">
+                      <select name="is_admin">
+                        <option value="0" {% if not user.is_admin %}selected{% endif %}>کاربر</option>
+                        <option value="1" {% if user.is_admin %}selected{% endif %}>ادمین</option>
+                      </select>
+                      <div>
+                        <label>تخصیص تانل‌ها</label>
+                        <div class="tunnel-checkboxes">
+                          {% for tunnel in all_tunnels %}
+                          <label class="checkbox-item">
+                            <input type="checkbox" name="tunnels" value="{{ tunnel }}" {% if tunnel in user.tunnels %}checked{% endif %}>
+                            {{ tunnel }}
+                          </label>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <button type="submit" class="btn">ذخیره تغییرات</button>
+                      </div>
+                    </form>
+                    <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" class="inline-flex mt-2">
+                      <button type="submit" class="btn btn-danger">حذف</button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 </body>
@@ -1797,6 +1696,8 @@ if __name__ == '__main__':
 END_WEB_MGR
 
   sudo chmod +x /etc/hysteria/web_manager.py
+  sudo mkdir -p /var/log/hysteria
+  colorEcho "Web manager file updated." green
 
   # Create systemd service for web manager
   sudo tee /etc/systemd/system/hysteria-web.service > /dev/null << 'EOF'
@@ -1817,14 +1718,25 @@ WantedBy=multi-user.target
 EOF
 
   # Install Python dependencies
-  sudo apt-get update -qq
-  sudo apt-get install -y python3-flask python3-yaml python3-werkzeug >/dev/null 2>&1
+  colorEcho "Checking Python dependencies..." cyan
+  if ! python3 -c "import flask, yaml, werkzeug" >/dev/null 2>&1; then
+    colorEcho "Installing required packages..." yellow
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y python3-flask python3-yaml python3-werkzeug >/dev/null 2>&1
+  else
+    colorEcho "Required packages already installed. Skipping apt install." green
+  fi
 
+  colorEcho "Reloading systemd service..." cyan
   sudo systemctl daemon-reload
-  sudo systemctl enable hysteria-web
-  sudo systemctl start hysteria-web
+  sudo systemctl enable hysteria-web >/dev/null 2>&1
+  sudo systemctl restart hysteria-web
 
-  colorEcho "Web Management Interface installed and started!" green
+  if sudo systemctl is-active --quiet hysteria-web; then
+    colorEcho "Web Management Interface is ready: http://YOUR_SERVER_IP:3388" green
+  else
+    colorEcho "Web service failed to start. Check: journalctl -u hysteria-web --no-pager -n 50" red
+  fi
 }
 
 manage_web() {
