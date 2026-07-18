@@ -99,11 +99,17 @@ fi
 # Give hysteria user access to necessary directories
 sudo chown -R hysteria:hysteria /etc/hysteria/ /var/log/hysteria/
 
-# Install iptables setup script for tunnels (SIMPLE!)
+# Install iptables setup script for tunnels (FOOLPROOF!)
 sudo tee /etc/hysteria/setup_iptables.sh > /dev/null << 'IPTABLES_EOF'
 #!/bin/bash
 MAPPING_FILE="/etc/hysteria/port_mapping.txt"
-WEB_PORT=3388
+
+# Get hysteria user ID
+HYSTERIA_UID=$(id -u hysteria 2>/dev/null)
+if [ -z "$HYSTERIA_UID" ]; then
+    echo "Error: hysteria user not found!"
+    exit 1
+fi
 
 # Clear old rules
 for chain in $(iptables -t mangle -L -n 2>/dev/null | grep '^Chain' | awk '{print $2}' | grep '^HYST_'); do
@@ -116,17 +122,11 @@ iptables -t mangle -X HYSTERIA_TRAFFIC 2>/dev/null
 # Create main chain
 iptables -t mangle -N HYSTERIA_TRAFFIC
 
-# EXCLUDE WEB MANAGER PORT FIRST (so it's NOT counted!)
-iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport $WEB_PORT -j RETURN
-iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport $WEB_PORT -j RETURN
-iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport $WEB_PORT -j RETURN
-iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport $WEB_PORT -j RETURN
-
 # Hook into INPUT and OUTPUT chains
 iptables -t mangle -A INPUT -j HYSTERIA_TRAFFIC
 iptables -t mangle -A OUTPUT -j HYSTERIA_TRAFFIC
 
-# Add rules for each tunnel
+# Add rules for each tunnel: ONLY COUNT TRAFFIC FROM HYSTERIA USER!
 if [ -f "$MAPPING_FILE" ]; then
     while IFS='|' read -r cfg service port_str; do
         [ -z "$cfg" ] && continue
@@ -137,15 +137,16 @@ if [ -f "$MAPPING_FILE" ]; then
         IFS=',' read -ra ports <<< "$port_str"
         for port in "${ports[@]}"; do
             [ -z "$port" ] && continue
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name"
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -j "HYST_$name"
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -j "HYST_$name"
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -j "HYST_$name"
+            # ONLY count traffic from hysteria user on this port!
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -m owner --uid-owner $HYSTERIA_UID -j "HYST_$name"
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -m owner --uid-owner $HYSTERIA_UID -j "HYST_$name"
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -m owner --uid-owner $HYSTERIA_UID -j "HYST_$name"
+            iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -m owner --uid-owner $HYSTERIA_UID -j "HYST_$name"
         done
     done < "$MAPPING_FILE"
 fi
 
-echo "Iptables rules updated! (Web port excluded)"
+echo "Iptables rules updated! (Only counts hysteria user traffic!)"
 IPTABLES_EOF
 
 sudo chmod +x /etc/hysteria/setup_iptables.sh
