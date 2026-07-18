@@ -2213,6 +2213,143 @@ manage_cronjobs() {
   done
 }
 
+# ------------------ GRE Tunnel Management Function ------------------
+manage_gre() {
+  while true; do
+    draw_menu "GRE Tunnel Management" \
+      "1 | Setup GRE on This (Iranian) Server" \
+      "2 | Setup GRE on Foreign Server (Generate Config)" \
+      "3 | Show GRE Status" \
+      "4 | Remove GRE Tunnel" \
+      "5 | Back"
+    read -rp "> " GRE_CHOICE
+
+    case "$GRE_CHOICE" in
+      1)
+        # Setup Iranian GRE
+        colorEcho "Setting up GRE on Iranian server..." cyan
+        read -rp "Enter Foreign Server Public IP: " FOREIGN_PUB_IP
+        read -rp "Enter Iranian Server Public IP: " IRAN_PUB_IP
+        read -rp "Enter GRE Tunnel IP for Iran (e.g., 10.0.0.2): " IRAN_GRE_IP
+        read -rp "Enter GRE Tunnel IP for Foreign (e.g., 10.0.0.1): " FOREIGN_GRE_IP
+
+        # Install dependencies
+        sudo apt update -y && sudo apt install -y iproute2
+
+        # Create GRE interface
+        sudo ip tunnel add gre1 mode gre local $IRAN_PUB_IP remote $FOREIGN_PUB_IP ttl 255
+        sudo ip addr add $IRAN_GRE_IP/30 dev gre1
+        sudo ip link set gre1 up
+
+        # Enable IP forwarding
+        echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.conf
+        sudo sysctl -p
+
+        # Create systemd service to bring GRE up on boot
+        sudo tee /etc/systemd/system/gre-tunnel.service > /dev/null <<EOF
+[Unit]
+Description=GRE Tunnel
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip tunnel add gre1 mode gre local $IRAN_PUB_IP remote $FOREIGN_PUB_IP ttl 255
+ExecStart=/sbin/ip addr add $IRAN_GRE_IP/30 dev gre1
+ExecStart=/sbin/ip link set gre1 up
+ExecStop=/sbin/ip link set gre1 down
+ExecStop=/sbin/ip tunnel del gre1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now gre-tunnel
+
+        colorEcho "GRE setup on Iranian server complete!" green
+        colorEcho "Now run option 2 to get foreign server config!" yellow
+        sleep 3
+        ;;
+      2)
+        # Generate foreign server config
+        colorEcho "Generating foreign server config..." cyan
+        read -rp "Enter Foreign Server Public IP (again): " FOREIGN_PUB_IP
+        read -rp "Enter Iranian Server Public IP (again): " IRAN_PUB_IP
+        read -rp "Enter GRE Tunnel IP for Iran (again): " IRAN_GRE_IP
+        read -rp "Enter GRE Tunnel IP for Foreign (again): " FOREIGN_GRE_IP
+
+        # Show foreign server setup commands
+        clear
+        colorEcho "=== Foreign Server GRE Setup ===" magenta
+        echo "Run these commands on your foreign server:"
+        echo "-------------------------------------------"
+        echo "sudo apt update && sudo apt install -y iproute2"
+        echo "sudo ip tunnel add gre1 mode gre local $FOREIGN_PUB_IP remote $IRAN_PUB_IP ttl 255"
+        echo "sudo ip addr add $FOREIGN_GRE_IP/30 dev gre1"
+        echo "sudo ip link set gre1 up"
+        echo "echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.conf && sudo sysctl -p"
+        echo ""
+        echo "To make it persistent on boot, create /etc/systemd/system/gre-tunnel.service:"
+        echo "--- START OF FILE ---"
+        cat <<EOF
+[Unit]
+Description=GRE Tunnel
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip tunnel add gre1 mode gre local $FOREIGN_PUB_IP remote $IRAN_PUB_IP ttl 255
+ExecStart=/sbin/ip addr add $FOREIGN_GRE_IP/30 dev gre1
+ExecStart=/sbin/ip link set gre1 up
+ExecStop=/sbin/ip link set gre1 down
+ExecStop=/sbin/ip tunnel del gre1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        echo "--- END OF FILE ---"
+        echo ""
+        echo "Then run:"
+        echo "sudo systemctl daemon-reload && sudo systemctl enable --now gre-tunnel"
+        echo ""
+        read -rp "Press Enter to continue..."
+        ;;
+      3)
+        # Show GRE status
+        clear
+        colorEcho "=== GRE Status ===" magenta
+        ip addr show gre1 2>/dev/null || colorEcho "gre1 interface not found!" red
+        echo ""
+        colorEcho "=== GRE Systemd Status ===" magenta
+        systemctl status gre-tunnel --no-pager 2>/dev/null || colorEcho "gre-tunnel service not found!" red
+        echo ""
+        read -rp "Press Enter to continue..."
+        ;;
+      4)
+        # Remove GRE
+        colorEcho "Removing GRE tunnel..." yellow
+        sudo systemctl stop gre-tunnel 2>/dev/null
+        sudo systemctl disable gre-tunnel 2>/dev/null
+        sudo rm -f /etc/systemd/system/gre-tunnel.service
+        sudo ip link set gre1 down 2>/dev/null
+        sudo ip tunnel del gre1 2>/dev/null
+        sudo systemctl daemon-reload
+        colorEcho "GRE tunnel removed!" green
+        sleep 2
+        ;;
+      5)
+        return
+        ;;
+      *)
+        colorEcho "Invalid selection!" red
+        sleep 2
+        ;;
+    esac
+  done
+}
+
 # ------------------ Sudo Authentication ------------------
 colorEcho "Please enter your sudo password to continue:" cyan
 sudo -v
@@ -2241,7 +2378,8 @@ draw_menu "Server Type Selection" \
           "6 | Restart Management" \
           "7 | Cronjob Management" \
           "8 | Web Management" \
-          "9 | Exit"
+          "9 | GRE Tunnel Management" \
+          "10 | Exit"
         read -rp "> " IRAN_CHOICE
         case "$IRAN_CHOICE" in
           1) 
@@ -2268,11 +2406,14 @@ draw_menu "Server Type Selection" \
           8)
             manage_web
             ;;
-          9) 
+          9)
+            manage_gre
+            ;;
+          10) 
             colorEcho "Exiting..." yellow; exit 0 
             ;;
           *) 
-            colorEcho "Invalid selection. Please enter 1-9." red 
+            colorEcho "Invalid selection. Please enter 1-10." red 
             ;;
         esac
       done
