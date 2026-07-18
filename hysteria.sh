@@ -106,6 +106,160 @@ if [ ! -f /etc/hysteria/hysteria-monitor.py ]; then
   sudo chown hysteria:hysteria /etc/hysteria/hysteria-monitor.py
 fi
 
+# Install psutil for traffic monitoring
+if ! python3 -c "import psutil" 2>/dev/null; then
+  colorEcho "Installing psutil for traffic monitoring..." cyan
+  sudo apt-get update -qq
+  sudo apt-get install -y python3-psutil >/dev/null 2>&1
+fi
+
+# Install traffic monitor script
+cat > /tmp/traffic_monitor.py << 'TRAFFIC_MONITOR_EOF'
+#!/usr/bin/env python3
+import psutil
+import time
+import json
+import os
+import glob
+
+# Paths
+DATA_FILE = "/etc/hysteria/traffic_data.json"
+CONFIG_DIR = "/etc/hysteria"
+
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_data(data):
+    try:
+        with open(DATA_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        # Give everyone read access
+        os.chmod(DATA_FILE, 0o644)
+    except Exception as e:
+        print(f"Failed to save data: {e}")
+
+
+def get_tunnel_name_from_config_path(config_path):
+    """Extract tunnel name from config file path (e.g., iran-london.yaml -> london)"""
+    filename = os.path.basename(config_path)
+    if filename.startswith("iran-") and filename.endswith(".yaml"):
+        return filename[5:-5]
+    return None
+
+
+def find_hysteria_processes():
+    """Find all running Hysteria client processes and map them to tunnel names"""
+    tunnel_procs = {}
+    for proc in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            cmdline = proc.info["cmdline"]
+            if not cmdline:
+                continue
+            # Check if it's a Hysteria client
+            if len(cmdline) >= 3 and cmdline[1] == "client" and cmdline[2].startswith(CONFIG_DIR):
+                config_path = cmdline[2]
+                tunnel_name = get_tunnel_name_from_config_path(config_path)
+                if tunnel_name:
+                    tunnel_procs[tunnel_name] = proc
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return tunnel_procs
+
+
+def main():
+    # Initialize data file
+    data = load_data()
+
+    # Create data file directory if it doesn't exist
+    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+
+    # Main loop
+    while True:
+        # Get current tunnel processes
+        tunnel_procs = find_hysteria_processes()
+
+        # Update traffic data
+        for tunnel_name, proc in tunnel_procs.items():
+            try:
+                io_counters = proc.io_counters()
+                current_tx = io_counters.write_bytes
+                current_rx = io_counters.read_bytes
+
+                # Initialize entry if it doesn't exist
+                if tunnel_name not in data:
+                    data[tunnel_name] = {
+                        "total_rx": 0,
+                        "total_tx": 0,
+                        "last_rx": current_rx,
+                        "last_tx": current_tx,
+                        "last_update": time.time()
+                    }
+
+                # Calculate delta
+                entry = data[tunnel_name]
+                delta_rx = current_rx - entry["last_rx"]
+                delta_tx = current_tx - entry["last_tx"]
+
+                # Update totals (only positive deltas to avoid rollbacks)
+                if delta_rx > 0:
+                    entry["total_rx"] += delta_rx
+                if delta_tx > 0:
+                    entry["total_tx"] += delta_tx
+
+                # Update last counters
+                entry["last_rx"] = current_rx
+                entry["last_tx"] = current_tx
+                entry["last_update"] = time.time()
+
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        # Save updated data
+        save_data(data)
+
+        # Wait for next update
+        time.sleep(2)
+
+
+if __name__ == "__main__":
+    main()
+TRAFFIC_MONITOR_EOF
+
+sudo mv /tmp/traffic_monitor.py /etc/hysteria/
+sudo chmod +x /etc/hysteria/traffic_monitor.py
+sudo chown hysteria:hysteria /etc/hysteria/traffic_monitor.py
+
+# Create systemd service for traffic monitor
+sudo tee /etc/systemd/system/hysteria-traffic-monitor.service > /dev/null << 'EOF'
+[Unit]
+Description=Hysteria Traffic Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=hysteria
+Group=hysteria
+ExecStart=/usr/bin/python3 /etc/hysteria/traffic_monitor.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd and start traffic monitor
+sudo systemctl daemon-reload
+sudo systemctl enable hysteria-traffic-monitor
+sudo systemctl start hysteria-traffic-monitor
+
 # ------------------ Manage Tunnels Function ------------------
 manage_tunnels() {
   set +e
@@ -1180,37 +1334,13 @@ def format_bytes(bytes_val):
 
 def get_traffic_usage(name):
   try:
-    # Read metrics port from file
-    metrics_port = None
-    with open("/etc/hysteria/metrics_ports.txt", "r") as f:
-      for line in f:
-        line = line.strip()
-        if not line:
-          continue
-        parts = line.split(":", 1)
-        if len(parts) == 2 and parts[0] == name:
-          metrics_port = parts[1]
-          break
-    if not metrics_port:
-      return "0 B"
-    
-    # Fetch metrics from Hysteria's API
-    import urllib.request
-    url = f"http://127.0.0.1:{metrics_port}/metrics"
-    with urllib.request.urlopen(url, timeout=2) as response:
-      metrics = response.read().decode("utf-8")
-    
-    # Parse rx and tx bytes
-    rx_bytes = 0
-    tx_bytes = 0
-    for line in metrics.split("\n"):
-      if line.startswith("hysteria_traffic_bytes_rx_total"):
-        rx_bytes = int(float(line.split()[-1]))
-      elif line.startswith("hysteria_traffic_bytes_tx_total"):
-        tx_bytes = int(float(line.split()[-1]))
-    
-    total_bytes = rx_bytes + tx_bytes
-    return format_bytes(total_bytes)
+    data_file = "/etc/hysteria/traffic_data.json"
+    import json
+    with open(data_file, "r") as f:
+      data = json.load(f)
+    if name in data:
+      total_bytes = data[name]["total_rx"] + data[name]["total_tx"]
+      return format_bytes(total_bytes)
   except Exception:
     pass
   return "0 B"
@@ -1610,8 +1740,17 @@ def reset_traffic(name):
     return redirect(url_for('index'))
 
   try:
-    # Restart the tunnel to reset Hysteria's metrics
-    subprocess.run(["systemctl", "restart", f"hysteria-{name}"], check=True)
+    data_file = "/etc/hysteria/traffic_data.json"
+    import json
+    # Read current data
+    with open(data_file, "r") as f:
+      data = json.load(f)
+    # Reset traffic for this tunnel
+    if name in data:
+      del data[name]
+    # Write back
+    with open(data_file, "w") as f:
+      json.dump(data, f, indent=2)
   except Exception:
     pass
   return redirect(url_for('index'))
@@ -2556,8 +2695,6 @@ elif [ "$SERVER_TYPE" == "iran" ]; then
     # Create configuration and service files for each tunnel
     CONFIG_FILE="/etc/hysteria/iran-${TUNNEL_NAME}.yaml"
     SERVICE_FILE="/etc/systemd/system/hysteria-${TUNNEL_NAME}.service"
-    # Generate a unique metrics port for this tunnel (use a simple hash of the tunnel name)
-    METRICS_PORT=$((20000 + $(echo -n "$TUNNEL_NAME" | cksum | awk '{print $1}') % 10000))
 
     cat << EOF | sudo tee "$CONFIG_FILE" > /dev/null
 server: "$SERVER_ADDRESS:$PORT"
@@ -2571,11 +2708,7 @@ tcpForwarding:
 $TCP_FORWARD
 udpForwarding:
 $UDP_FORWARD
-metrics:
-  listen: "127.0.0.1:$METRICS_PORT"
 EOF
-    # Save the metrics port for later use
-    echo "$TUNNEL_NAME:$METRICS_PORT" | sudo tee -a /etc/hysteria/metrics_ports.txt > /dev/null
 
     cat << EOF | sudo tee "$SERVICE_FILE" > /dev/null
 [Unit]
