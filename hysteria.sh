@@ -174,7 +174,22 @@ def find_hysteria_processes():
     return tunnel_procs
 
 
+def log(message):
+    """Write a message to the log file"""
+    log_file = "/var/log/hysteria/traffic_monitor.log"
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open(log_file, "a") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
 def main():
+    # Create log directory if needed
+    os.makedirs("/var/log/hysteria", exist_ok=True)
+    
+    log("=== Starting traffic monitor ===")
     # Initialize data file
     data = load_data()
 
@@ -183,15 +198,19 @@ def main():
 
     # Main loop
     while True:
+        log("--- Scanning processes ---")
         # Get current tunnel processes
         tunnel_procs = find_hysteria_processes()
+        log(f"Found {len(tunnel_procs)} tunnel(s): {list(tunnel_procs.keys())}")
 
         # Update traffic data
         for tunnel_name, proc in tunnel_procs.items():
             try:
+                log(f"Processing tunnel: {tunnel_name} (PID {proc.pid})")
                 io_counters = proc.io_counters()
                 current_tx = io_counters.write_bytes
                 current_rx = io_counters.read_bytes
+                log(f"  Current RX: {current_rx}, TX: {current_tx}")
 
                 # Initialize entry if it doesn't exist
                 if tunnel_name not in data:
@@ -202,28 +221,36 @@ def main():
                         "last_tx": current_tx,
                         "last_update": time.time()
                     }
+                    log(f"  Initialized new tunnel entry")
 
                 # Calculate delta
                 entry = data[tunnel_name]
                 delta_rx = current_rx - entry["last_rx"]
                 delta_tx = current_tx - entry["last_tx"]
+                log(f"  Delta RX: {delta_rx}, Delta TX: {delta_tx}")
 
                 # Update totals (only positive deltas to avoid rollbacks)
                 if delta_rx > 0:
                     entry["total_rx"] += delta_rx
                 if delta_tx > 0:
                     entry["total_tx"] += delta_tx
+                log(f"  Total RX: {entry['total_rx']}, Total TX: {entry['total_tx']}")
 
                 # Update last counters
                 entry["last_rx"] = current_rx
                 entry["last_tx"] = current_tx
                 entry["last_update"] = time.time()
 
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
+            except psutil.NoSuchProcess:
+                log(f"  Process {proc.pid} no longer exists")
+            except psutil.AccessDenied:
+                log(f"  Access denied to process {proc.pid}")
+            except Exception as e:
+                log(f"  Error processing tunnel {tunnel_name}: {type(e).__name__}: {e}")
 
         # Save updated data
         save_data(data)
+        log(f"Saved data: {json.dumps(data)}")
 
         # Wait for next update
         time.sleep(2)
@@ -245,8 +272,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=hysteria
-Group=hysteria
+User=root
+Group=root
 ExecStart=/usr/bin/python3 /etc/hysteria/traffic_monitor.py
 Restart=always
 RestartSec=5
