@@ -2502,48 +2502,7 @@ collect_ports() {
 }
 
 # ------------------ Local IP Selection (Only for Iran) ------------------
-if [ "$SERVER_TYPE" == "iran" ]; then
-  while true; do
-    draw_menu "Local IP Selection" \
-      "1 | Enter IPv4 manually" \
-      "2 | Enter IPv6 manually" \
-      "3 | Exit"
-    read -r IP_VERSION_CHOICE
 
-    case "$IP_VERSION_CHOICE" in
-      1)
-        while true; do
-          read -rp "Enter your local IPv4 address (e.g., 192.168.1.100): " REMOTE_IP
-          if [[ "$REMOTE_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-            break
-          else
-            colorEcho "Invalid IPv4 address! Please try again." red
-          fi
-        done
-        break
-        ;;
-      2)
-        while true; do
-          read -rp "Enter your local IPv6 address (e.g., fdca:3c6e:69e8::1): " REMOTE_IP
-          if [[ "$REMOTE_IP" =~ ^[0-9a-fA-F:.]+$ ]]; then
-            REMOTE_IP="[${REMOTE_IP}]"
-            break
-          else
-            colorEcho "Invalid IPv6 address! Please try again." red
-          fi
-        done
-        break
-        ;;
-      3)
-        # Return to previous menu
-        continue 2
-        ;;
-      *)
-        colorEcho "Invalid selection. Please enter 1, 2, or 3." red
-        ;;
-    esac
-  done
-fi
 
 # ------------------ Obfuscation Option ------------------
 read -p "Do you want to enable Obfuscation (obfs)? [y/N]: " ENABLE_OBFS
