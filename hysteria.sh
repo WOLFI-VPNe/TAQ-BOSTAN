@@ -2713,10 +2713,10 @@ elif [ "$SERVER_TYPE" == "iran" ]; then
 
     for TUNNEL_PORT in "${ports_array[@]}"; do
       TCP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
-    remote: '$REMOTE_IP:$TUNNEL_PORT'
+    remote: '0.0.0.0:$TUNNEL_PORT'
 "
       UDP_FORWARD+="  - listen: 0.0.0.0:$TUNNEL_PORT
-    remote: '$REMOTE_IP:$TUNNEL_PORT'
+    remote: '0.0.0.0:$TUNNEL_PORT'
 "
       if [ -z "$FORWARDED_PORTS" ]; then
         FORWARDED_PORTS="$TUNNEL_PORT"
