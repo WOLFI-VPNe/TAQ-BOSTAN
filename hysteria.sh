@@ -148,8 +148,8 @@ if [ -f "$MAPPING_FILE" ]; then
         # Add rules for each port
         IFS=',' read -ra ports <<< "$port_str"
         for port in "${ports[@]}"; do
-            [ -z "$port" ] && continue
-            iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name" 2>/dev/null
+ [ -z "$port" ] && continue
+  iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --dport "$port" -j "HYST_$name" 2>/dev/null
             iptables -t mangle -A HYSTERIA_TRAFFIC -p tcp --sport "$port" -j "HYST_$name" 2>/dev/null
             iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --dport "$port" -j "HYST_$name" 2>/dev/null
             iptables -t mangle -A HYSTERIA_TRAFFIC -p udp --sport "$port" -j "HYST_$name" 2>/dev/null
@@ -2513,7 +2513,6 @@ if [ "$SERVER_TYPE" == "iran" ]; then
     case "$IP_VERSION_CHOICE" in
       1)
         while true; do
-          read -rp "Enter your local IPv4 address (e.g., 192.168.1.100): " REMOTE_IP
           if [[ "$REMOTE_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
             break
           else
