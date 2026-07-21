@@ -2513,6 +2513,7 @@ if [ "$SERVER_TYPE" == "iran" ]; then
     case "$IP_VERSION_CHOICE" in
       1)
         while true; do
+          read -rp "Enter your local IPv4 address (e.g., 192.168.1.100): " REMOTE_IP
           if [[ "$REMOTE_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
             break
           else
