@@ -24,7 +24,7 @@
 دستور اجرای اسکریپت:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/ParsaKSH/TAQ-BOSTAN/main/script.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/WOLFI-VPNe/TAQ-BOSTAN/main/hysteria.sh)
 ```
 ## 🌟 معرفی پروژه
 پروژه‌ی **طاق‌بستان** یک راهکار جامع برای ایجاد تونل‌های امن اینترنتی و IPv6 لوکال است. این پروژه شامل سه بخش اصلی می‌شود:
